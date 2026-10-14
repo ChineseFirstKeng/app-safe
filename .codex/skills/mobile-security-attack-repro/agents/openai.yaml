@@ -1,0 +1,4 @@
+interface:
+  display_name: "移动端安全攻击复现"
+  short_description: "生成可复现的移动端攻击方案、脚本、验证与约束文档体系"
+  default_prompt: "使用 $mobile-security-attack-repro，为授权的移动端安全测试生成包含脚本、验证和统一文档的攻击复现包。"

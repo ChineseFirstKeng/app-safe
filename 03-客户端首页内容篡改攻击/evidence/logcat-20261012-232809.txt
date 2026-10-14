@@ -1,0 +1,1 @@
+10-12 23:28:07.767  2009  2047 I ActivityTaskManager: Displayed com.sdmc.homewoo/.MainActivity: +678ms

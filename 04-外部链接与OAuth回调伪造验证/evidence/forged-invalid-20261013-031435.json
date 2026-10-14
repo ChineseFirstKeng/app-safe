@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-10-13T03:14:35.701040+08:00",
+  "apk_sha256": "968460c42b849e0b91f2a1de46a8c1c18a12027066251aaaac190267c8545c38",
+  "device_apk_sha256": "968460c42b849e0b91f2a1de46a8c1c18a12027066251aaaac190267c8545c38",
+  "uri_scheme": "homewoo",
+  "uri_host": "calendar",
+  "uri_path": "/google/complete",
+  "callback_values": "obviously invalid lab markers; not persisted",
+  "app_network_blocked_during_delivery": true,
+  "app_network_block_restored": true,
+  "am_start_status": "ok",
+  "adb_exit_code": 0,
+  "uri_parameters_in_am_output": true,
+  "activity": "com.sdmc.homewoo/.MainActivity",
+  "callback_delivered": true,
+  "oauth_bypass_proven": false,
+  "business_binding_verified": false
+}

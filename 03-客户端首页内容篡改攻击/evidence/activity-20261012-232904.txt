@@ -1,0 +1,14 @@
+    * TaskRecord{c0b4a57 #67 I=com.sdmc.homewoo/.MainActivity U=0 StackId=56 sz=1}
+      intent={flg=0x10000000 cmp=com.sdmc.homewoo/.MainActivity}
+      mActivityComponent=com.sdmc.homewoo/.MainActivity
+      Activities=[ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}]
+      * Hist #0: ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}
+          Intent { flg=0x10000000 cmp=com.sdmc.homewoo/.MainActivity }
+          frontOfTask=true task=TaskRecord{c0b4a57 #67 I=com.sdmc.homewoo/.MainActivity U=0 StackId=56 sz=1}
+          mActivityComponent=com.sdmc.homewoo/.MainActivity
+          realComponentName=com.sdmc.homewoo/.MainActivity
+      TaskRecord{c0b4a57 #67 I=com.sdmc.homewoo/.MainActivity U=0 StackId=56 sz=1}
+        Run #0: ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}
+    mResumedActivity: ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}
+ ResumedActivity:ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}
+  ResumedActivity: ActivityRecord{39d2516 u0 com.sdmc.homewoo/.MainActivity t67}
