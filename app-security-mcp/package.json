@@ -1,0 +1,41 @@
+{
+  "name": "app-security-mcp",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "App 安全 MCP 服务：最小链路与业务扩展入口",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/http-main.js",
+    "dev": "tsx src/http-main.ts",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "start:stdio": "node dist/index.js",
+    "dev:stdio": "tsx src/index.ts",
+    "configure": "node scripts/configure.mjs",
+    "smoke:remote": "node scripts/smoke-remote.mjs",
+    "install:local": "npm run build && node scripts/install-local.mjs",
+    "build:plugin": "npm run build && node scripts/build-plugin.mjs",
+    "check:plugin": "node scripts/check-plugin.mjs",
+    "test:acceptance": "npm run build && node scripts/test-acceptance.mjs",
+    "check:clean-install": "npm run build:plugin && node scripts/check-clean-install.mjs",
+    "check:claude-install": "npm run build:plugin && node scripts/check-claude-install.mjs",
+    "check:worker-timeout": "npm run build && node scripts/check-worker-timeout.mjs",
+    "check:deep-timeout": "npm run build && node scripts/check-deep-timeout.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "0.28.2",
+    "smol-toml": "1.9.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

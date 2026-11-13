@@ -1,0 +1,13 @@
+{
+  "name": "app-security",
+  "version": "0.36.0",
+  "description": "Android/iOS 安装包硬编码候选检查、脱敏证据及修复建议，MCP 与 Skill 一次安装。",
+  "mcpServers": {
+    "app-security": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/index.mjs"
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "app-security": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/app-security-mcp/dist/index.js"]
+    }
+  }
+}

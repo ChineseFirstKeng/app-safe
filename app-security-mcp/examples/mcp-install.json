@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "app-security": {
+      "command": "npx",
+      "args": ["-y", "https://www.hunluanshuihu.icu/mcp/install/app-security-mcp-0.1.0.tgz"],
+      "env": {
+        "MCP_AUTH_TOKEN": "REPLACE_WITH_YOUR_ACCESS_TOKEN"
+      }
+    }
+  }
+}

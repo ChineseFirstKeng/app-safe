@@ -1,0 +1,25 @@
+{
+  "name": "app-security-mcp",
+  "version": "0.3.0",
+  "description": "Connect an MCP client to the hosted App Security tools over stdio",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "app-security-mcp": "bin/cli.mjs"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "smol-toml": "1.9.1"
+  }
+}

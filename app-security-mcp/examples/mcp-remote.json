@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "app-security": {
+      "type": "http",
+      "url": "https://www.hunluanshuihu.icu/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_MCP_AUTH_TOKEN"
+      }
+    }
+  }
+}

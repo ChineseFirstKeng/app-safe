@@ -1,0 +1,11 @@
+interface:
+  display_name: "App Security"
+  short_description: "连接 App Security MCP，验证链路并运行五个演示工具"
+  default_prompt: "使用 $app-security 检查连接，并运行一遍全部演示工具。"
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "app-security"
+      description: "App Security 远程 MCP 服务"
+      transport: "streamable_http"
+      url: "https://www.hunluanshuihu.icu/mcp"

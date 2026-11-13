@@ -1,0 +1,22 @@
+[Unit]
+Description=App Security MCP (Streamable HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=app-security-mcp
+Group=app-security-mcp
+WorkingDirectory=/opt/app-security-mcp/current
+EnvironmentFile=/etc/app-security-mcp/service.env
+ExecStart=/opt/app-security-mcp/runtime/node /opt/app-security-mcp/current/dist/http-main.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

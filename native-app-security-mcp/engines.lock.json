@@ -1,0 +1,27 @@
+{
+  "host": "macos-arm64",
+  "engines": {
+    "jdk": {
+      "version": "25.0.5+8.0.LTS",
+      "file": "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.5_8.tar.gz",
+      "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.5_8.tar.gz",
+      "sha256": "36dc14d797aaff6d89aab302cd053fdba6207dfdcf772052fa7b023a94b0e857",
+      "size": 136446056
+    },
+    "jadx": {
+      "version": "v1.5.6",
+      "file": "jadx-1.5.6.zip",
+      "url": "https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip",
+      "sha256": "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974",
+      "size": 72646741
+    },
+    "ghidra": {
+      "version": "Ghidra_12.2_build",
+      "file": "ghidra_12.2_PUBLIC_20261016.zip",
+      "url": "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip",
+      "api_asset_url": "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/assets/665189215",
+      "sha256": "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67",
+      "size": 569712708
+    }
+  }
+}

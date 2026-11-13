@@ -1,0 +1,5 @@
+{$MCP_DOMAIN} {
+    reverse_proxy mcp:3000 {
+        flush_interval -1
+    }
+}

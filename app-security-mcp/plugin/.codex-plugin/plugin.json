@@ -1,0 +1,13 @@
+{
+  "name": "app-security",
+  "version": "0.36.0",
+  "description": "Android/iOS 安装包硬编码候选检查、脱敏证据及修复建议，MCP 与 Skill 一次安装。",
+  "skills": "./skills",
+  "interface": {
+    "displayName": "App Security",
+    "shortDescription": "APK/IPA 硬编码检查与修复建议",
+    "defaultPrompt": [
+      "检查我指定的 APK 或 IPA 中的硬编码安全候选，给出证据、修复建议及覆盖缺口。"
+    ]
+  }
+}
